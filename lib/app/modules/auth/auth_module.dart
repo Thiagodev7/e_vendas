@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:e_vendas/app/app_module.dart';
 import 'package:e_vendas/app/core/config/api_config.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'services/auth_service.dart';
@@ -7,19 +8,16 @@ import 'login_page.dart';
 
 class AuthModule extends Module {
   @override
+  final List<Module> imports = [
+    AppModule(),
+  ];
+
+  @override
   void binds(i) {
     i.addSingleton(AuthService.new);
-  i.addSingleton(AuthStore.new);
-  // ✅ Registra Dio com BaseOptions embutido
-    i.addSingleton(() => Dio(
-          BaseOptions(
-            baseUrl: ApiConfig.baseUrl,
-            headers: ApiConfig.defaultHeaders,
-            connectTimeout: const Duration(seconds: 15),
-            receiveTimeout: const Duration(seconds: 15),
-          ),
-        ));
+    i.addSingleton(AuthStore.new);
   }
+
   @override
   void routes(RouteManager r) {
     r.child(

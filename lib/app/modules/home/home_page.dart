@@ -166,6 +166,13 @@ class _HomePageState extends State<HomePage> {
             },
           ),
           _buildDrawerItem(
+            icon: Icons.workspace_premium,
+            text: 'Planos',
+            onTap: () {
+              Modular.to.navigate('/planos/');
+            },
+          ),
+          _buildDrawerItem(
             icon: Icons.shopping_cart,
             text: 'Vendas',
             onTap: () {
