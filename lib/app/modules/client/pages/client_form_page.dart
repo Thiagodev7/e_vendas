@@ -1,0 +1,764 @@
+import 'package:e_vendas/app/core/model/generic_state_model.dart';
+import 'package:e_vendas/app/core/model/pessoa_model.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:flutter_modular/flutter_modular.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/dashboard_layout.dart';
+import '../../../core/utils/responsive_helper.dart';
+import '../stores/client_store.dart';
+
+class ClientFormPage extends StatefulWidget {
+  final Map<String, dynamic>? selectedPlan;
+
+  const ClientFormPage({super.key, this.selectedPlan});
+
+  @override
+  State<ClientFormPage> createState() => _ClientFormPageState();
+}
+
+class _ClientFormPageState extends State<ClientFormPage> {
+  final store = Modular.get<ClientStore>();
+  final _formKey = GlobalKey<FormState>();
+
+  // Controllers
+  final cpfController = TextEditingController();
+  final cepController = TextEditingController();
+  final numeroController = TextEditingController();
+  final complementoController = TextEditingController();
+
+  // Máscaras
+  final cpfMask = MaskTextInputFormatter(mask: '###.###.###-##');
+  final cepMask = MaskTextInputFormatter(mask: '#####-###');
+
+  GenericStateModel? estadoCivilTitular;
+
+  @override
+  void dispose() {
+    cpfController.dispose();
+    cepController.dispose();
+    numeroController.dispose();
+    complementoController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return DashboardLayout(
+      showBackButton: true,
+      title: 'Cadastrar Cliente',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          double maxWidth;
+          if (ResponsiveHelper.isDesktop(context)) {
+            maxWidth = constraints.maxWidth * 1;
+          } else if (ResponsiveHelper.isTablet(context)) {
+            maxWidth = 600;
+          } else {
+            maxWidth = double.infinity;
+          }
+
+          return Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: Observer(
+                builder: (_) => Stack(
+                  children: [
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (widget.selectedPlan != null)
+                              _buildSelectedPlan(widget.selectedPlan!, isDark),
+                            const SizedBox(height: 20),
+
+                            // Responsivo: dados e endereço lado a lado no desktop
+                            if (ResponsiveHelper.isDesktop(context)) ...[
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                      child: _buildCardDadosPessoais(isDark)),
+                                  const SizedBox(width: 24),
+                                  Expanded(child: _buildCardEndereco(isDark)),
+                                ],
+                              ),
+                            ] else ...[
+                              _buildCardDadosPessoais(isDark),
+                              const SizedBox(height: 20),
+                              _buildCardEndereco(isDark),
+                            ],
+
+                            // Após Card Endereço
+                            const SizedBox(height: 20),
+
+// Responsivo: Responsável Financeiro + Dependentes lado a lado no desktop
+                            if (ResponsiveHelper.isDesktop(context)) ...[
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                      child: _buildCardResponsavelFinanceiro(
+                                          isDark)),
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                      child: _buildCardDependentes(isDark)),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              _buildCardContatos(isDark),
+                            ] else ...[
+                              _buildCardResponsavelFinanceiro(isDark),
+                              const SizedBox(height: 20),
+                              _buildCardDependentes(isDark),
+                              const SizedBox(height: 20),
+                              _buildCardContatos(isDark),
+                            ],
+                            const SizedBox(height: 24),
+
+                            _buildSubmitButton(),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Mensagem de erro flutuante
+                    if (store.errorMessage != null && !store.isLoading)
+                      Positioned(
+                        bottom: 16,
+                        left: 16,
+                        right: 16,
+                        child: Material(
+                          color: Colors.red.shade700,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Text(
+                              store.errorMessage!,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Plano selecionado
+  Widget _buildSelectedPlan(Map<String, dynamic> plan, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.lilac.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.lilac),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Plano Selecionado: ${plan['plano']}',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black)),
+          Text('Vidas: ${plan['vidas']}'),
+          Text('Mensalidade: R\$ ${plan['valorMensal']}'),
+          Text('Adesão: R\$ ${plan['valorAdesao']}'),
+        ],
+      ),
+    );
+  }
+
+  /// Card Dados Pessoais
+  Widget _buildCardDadosPessoais(bool isDark) {
+    final pessoa = store.titular;
+
+    return _buildCardContainer(
+      title: 'Dados Pessoais',
+      isDark: isDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildCpfField(),
+          if (pessoa != null) ...[
+            const SizedBox(height: 8),
+            _buildInfoText('Nome', pessoa.nome),
+            _buildInfoText('Data Nascimento', pessoa.dataNascimento),
+            _buildInfoText('Nome da Mãe', pessoa.nomeMae),
+            _buildInfoText('Nome do Pai', pessoa.nomePai),
+            _buildInfoText('CNS', pessoa.cns),
+          ],
+          const SizedBox(height: 12),
+          _buildEstadoCivilSelector(),
+        ],
+      ),
+    );
+  }
+
+  /// Card Endereço
+  Widget _buildCardEndereco(bool isDark) {
+    final endereco = store.endereco;
+
+    return _buildCardContainer(
+      title: 'Endereço',
+      isDark: isDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildCepField(),
+          if (endereco != null) ...[
+            const SizedBox(height: 8),
+            _buildInfoText('Cidade', endereco.nomeCidade),
+            _buildInfoText('UF', endereco.siglaUf),
+            _buildInfoText('Bairro', endereco.bairro),
+            _buildInfoText('Logradouro', endereco.logradouro),
+          ],
+          const SizedBox(height: 8),
+          _buildTextField('Número', numeroController,
+              keyboardType: TextInputType.number),
+          _buildTextField('Complemento', complementoController),
+        ],
+      ),
+    );
+  }
+
+  /// Card Responsável Financeiro
+  Widget _buildCardResponsavelFinanceiro(bool isDark) {
+    return _buildCardContainer(
+      title: 'Responsável Financeiro',
+      isDark: isDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ElevatedButton.icon(
+            onPressed: () => _openModalPessoa(isDark, isResponsavel: true),
+            icon: const Icon(Icons.person_add),
+            label: const Text('Adicionar Responsável'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Observer(builder: (_) {
+            final resp = store.responsavelFinanceiro;
+            if (resp == null)
+              return const Text('Nenhum responsável adicionado');
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildInfoText('Nome', resp.nome),
+                _buildInfoText('CPF', resp.cpf),
+                _buildInfoText('Data Nascimento', resp.dataNascimento),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  /// Card Dependentes
+  Widget _buildCardDependentes(bool isDark) {
+    return _buildCardContainer(
+      title: 'Dependentes',
+      isDark: isDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ElevatedButton.icon(
+            onPressed: () => _openModalPessoa(isDark, isResponsavel: false),
+            icon: const Icon(Icons.group_add),
+            label: const Text('Adicionar Dependente'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Observer(builder: (_) {
+            if (store.dependentes.isEmpty) {
+              return const Text('Nenhum dependente adicionado');
+            }
+            return Column(
+              children: List.generate(store.dependentes.length, (index) {
+                final dep = store.dependentes[index];
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(dep.nome),
+                  subtitle: Text(dep.idGrauDependencia != null
+                      ? 'Grau: ${store.bondDependentList.firstWhere((e) => e.id == dep.idGrauDependencia).name}'
+                      : ''),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () => store.removerDependente(index),
+                  ),
+                );
+              }),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  /// Card Contatos
+  Widget _buildCardContatos(bool isDark) {
+    return _buildCardContainer(
+      title: 'Contatos',
+      isDark: isDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ElevatedButton.icon(
+            onPressed: () => _openModalContato(),
+            icon: const Icon(Icons.add_call),
+            label: const Text('Adicionar Contato'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Observer(builder: (_) {
+            if (store.contatos.isEmpty) {
+              return const Text('Nenhum contato adicionado');
+            }
+            return Column(
+              children: List.generate(store.contatos.length, (index) {
+                final contato = store.contatos[index];
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('${contato['descricao']}'),
+                  subtitle: Text(contato['nome_contato'] ?? ''),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () => store.removerContato(index),
+                  ),
+                );
+              }),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  /// Botão principal
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        onPressed: store.isLoading
+            ? null
+            : () async {
+                if (_formKey.currentState!.validate() &&
+                    store.titular != null &&
+                    store.endereco != null) {
+                  final success = await store.salvarCliente(
+                    titular: store.titular!,
+                    endereco: store.endereco!,
+                    contrato: widget.selectedPlan ?? {},
+                    dependentes: store.dependentes.toList(),
+                    responsavelFinanceiro: store.responsavelFinanceiro,
+                    contatos: store.contatos.toList(),
+                  );
+
+                  if (success) {
+                    _showSnackBar(
+                        'Cliente cadastrado com sucesso', Colors.green);
+                    Modular.to.pop();
+                  } else if (store.errorMessage != null) {
+                    _showSnackBar(store.errorMessage!, Colors.red);
+                  }
+                }
+              },
+        child: store.isLoading
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const Text(
+                'Cadastrar Cliente',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+      ),
+    );
+  }
+
+  // =====================
+  // COMPONENTES REUTILIZÁVEIS
+  // =====================
+
+  Widget _buildCpfField() {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildTextField(
+            'CPF',
+            cpfController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [cpfMask],
+          ),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: () async {
+            await store.buscarCpf(cpfMask.getUnmaskedText());
+            store.titular = store.pessoa;
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+          child: const Text('Buscar'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCepField() {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildTextField(
+            'CEP',
+            cepController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [cepMask],
+          ),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: () async {
+            await store.buscarCep(cepMask.getUnmaskedText());
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+          child: const Text('Buscar'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoText(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(
+        '$label: $value',
+        style: TextStyle(
+          fontSize: 14,
+          color: Theme.of(context).textTheme.bodyMedium?.color,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEstadoCivilSelector() {
+    return Observer(builder: (_) {
+      return DropdownButtonFormField<GenericStateModel>(
+        value: estadoCivilTitular,
+        decoration: InputDecoration(
+          labelText: 'Estado Civil',
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        items: store.estadoCivilList.map((e) {
+          return DropdownMenuItem(
+            value: e,
+            child: Text(e.name),
+          );
+        }).toList(),
+        onChanged: (val) => setState(() => estadoCivilTitular = val),
+        validator: (value) =>
+            value == null || value.id == 0 ? 'Selecione o estado civil' : null,
+      );
+    });
+  }
+
+  Widget _buildCardContainer({
+    required String title,
+    required Widget child,
+    required bool isDark,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.black.withOpacity(0.6)
+            : Colors.white.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black,
+            ),
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField(
+    String label,
+    TextEditingController controller, {
+    TextInputType keyboardType = TextInputType.text,
+    List<TextInputFormatter>? inputFormatters,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextFormField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        keyboardType: keyboardType,
+        inputFormatters: inputFormatters,
+        validator: (value) =>
+            value == null || value.isEmpty ? 'Preencha o campo $label' : null,
+      ),
+    );
+  }
+
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: color),
+    );
+  }
+
+  // =====================
+  // MODAIS
+  // =====================
+
+  void _openModalPessoa(bool isDark, {required bool isResponsavel}) {
+    final cpfModalController = TextEditingController();
+    GenericStateModel? estadoCivilSelecionado;
+    GenericStateModel? grauDependenciaSelecionado;
+    PessoaModel? pessoaEncontrada; // dados temporários no modal
+    final cpfMaskModal = MaskTextInputFormatter(mask: '###.###.###-##');
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              backgroundColor: isDark
+                  ? Colors.black.withOpacity(0.8)
+                  : Colors.white.withOpacity(0.95),
+              title: Text(
+                isResponsavel
+                    ? 'Adicionar Responsável Financeiro'
+                    : 'Adicionar Dependente',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // CPF
+                  TextFormField(
+                    controller: cpfModalController,
+                    decoration: const InputDecoration(labelText: 'CPF'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [cpfMaskModal],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Buscar CPF
+                  ElevatedButton(
+                    onPressed: () async {
+                      await store.buscarCpf(cpfMaskModal.getUnmaskedText());
+                      setModalState(() {
+                        pessoaEncontrada = store.pessoa;
+                        pessoaEncontrada?.cpf = cpfMaskModal.getUnmaskedText();
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                    ),
+                    child: const Text('Buscar'),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Dados encontrados
+                  if (pessoaEncontrada != null) ...[
+                    _buildInfoText('Nome', pessoaEncontrada!.nome),
+                    _buildInfoText(
+                        'Nascimento', pessoaEncontrada!.dataNascimento),
+                    _buildInfoText('Mãe', pessoaEncontrada!.nomeMae),
+                    _buildInfoText('Pai', pessoaEncontrada!.nomePai),
+                  ],
+                  const SizedBox(height: 12),
+
+                  // Estado Civil
+                  Observer(builder: (_) {
+                    return DropdownButtonFormField<GenericStateModel>(
+                      value: estadoCivilSelecionado,
+                      decoration:
+                          const InputDecoration(labelText: 'Estado Civil'),
+                      items: store.estadoCivilList.map((e) {
+                        return DropdownMenuItem(value: e, child: Text(e.name));
+                      }).toList(),
+                      onChanged: (val) =>
+                          setModalState(() => estadoCivilSelecionado = val),
+                      validator: (value) => value == null || value.id == 0
+                          ? 'Selecione o estado civil'
+                          : null,
+                    );
+                  }),
+
+                  // Se for dependente, mostra grau de dependência
+                  if (!isResponsavel) ...[
+                    const SizedBox(height: 12),
+                    Observer(builder: (_) {
+                      return DropdownButtonFormField<GenericStateModel>(
+                        value: grauDependenciaSelecionado,
+                        decoration: const InputDecoration(
+                            labelText: 'Grau de Dependência'),
+                        items: store.bondDependentList.map((e) {
+                          return DropdownMenuItem(
+                              value: e, child: Text(e.name));
+                        }).toList(),
+                        onChanged: (val) => setModalState(
+                            () => grauDependenciaSelecionado = val),
+                        validator: (value) => value == null || value.id == 0
+                            ? 'Selecione o grau de dependência'
+                            : null,
+                      );
+                    }),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: (pessoaEncontrada != null &&
+                          estadoCivilSelecionado != null &&
+                          estadoCivilSelecionado!.id != 0 &&
+                          (isResponsavel ||
+                              (grauDependenciaSelecionado != null &&
+                                  grauDependenciaSelecionado?.id != 0)))
+                      ? () {
+                          final pessoa = pessoaEncontrada!.copyWith(
+                            idEstadoCivil: estadoCivilSelecionado!.id,
+                            // Se precisar salvar grau de dependência no JSON
+                            idGrauDependencia: !isResponsavel
+                                ? grauDependenciaSelecionado!.id
+                                : null,
+                          );
+                          if (isResponsavel) {
+                            store.responsavelFinanceiro = pessoa;
+                          } else {
+                            store.adicionarDependente(pessoa);
+                          }
+                          Navigator.pop(ctx);
+                        }
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                  ),
+                  child: const Text('Salvar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _openModalContato() {
+    //final dddController = TextEditingController();
+    final descricaoController = TextEditingController();
+    final nomeController = TextEditingController();
+    GenericStateModel? tipoContatoSelecionado;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              title: const Text('Adicionar Contato'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Observer(builder: (_) {
+                    return DropdownButtonFormField<GenericStateModel>(
+                      value: tipoContatoSelecionado,
+                      decoration:
+                          const InputDecoration(labelText: 'Tipo de Contato'),
+                      items: store.contactTypes.map((e) {
+                        return DropdownMenuItem(value: e, child: Text(e.name));
+                      }).toList(),
+                      onChanged: (val) =>
+                          setModalState(() => tipoContatoSelecionado = val),
+                      validator: (value) => value == null || value.id == 0
+                          ? 'Selecione o tipo'
+                          : null,
+                    );
+                  }),
+                  const SizedBox(height: 12),
+                  _buildTextField('Descrição', descricaoController,
+                      keyboardType: TextInputType.text),
+                  _buildTextField('Nome do Contato', nomeController),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (tipoContatoSelecionado == null ||
+                        tipoContatoSelecionado!.id == 0) {
+                      _showSnackBar('Selecione o tipo de contato', Colors.red);
+                      return;
+                    }
+                    store.adicionarContato({
+                      'id_meio_comunicacao': tipoContatoSelecionado!.id,
+                      'descricao': descricaoController.text,
+                      'nome_contato': nomeController.text,
+                    });
+                    Navigator.pop(ctx);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                  ),
+                  child: const Text('Salvar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}

@@ -1,0 +1,44 @@
+name: e_vendas
+description: "Projeto Flutter para vendas de planos odontológicos (e-Vendas)"
+publish_to: 'none' # Mantém privado, remova para publicar no pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.6.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Ícones estilo iOS
+  cupertino_icons: ^1.0.8
+
+  # Navegação e injeção de dependências
+  flutter_modular: ^6.3.4
+
+  # MobX para gerenciamento de estado
+  mobx: ^2.2.1
+  flutter_mobx: ^2.3.0
+
+  # Requisições HTTP
+  dio: ^5.4.0
+  shared_preferences: ^2.5.3
+  mask_text_input_formatter: ^2.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Geração de código para MobX
+  build_runner: ^2.4.8
+  mobx_codegen: ^2.6.1
+
+  # Lints recomendadas do Flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/logo_complete.png
+    - assets/images/logo_white.png
