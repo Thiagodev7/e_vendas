@@ -31,7 +31,6 @@ class _HomePageState extends State<HomePage> {
 
         return DashboardLayout(
           title: 'e-Vendas',
-          showBackButton: false, // Home não precisa do botão voltar
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(

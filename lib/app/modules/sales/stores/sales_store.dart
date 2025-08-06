@@ -21,49 +21,78 @@ abstract class _SalesStoreBase with Store {
     _loadVendas();
   }
 
-  /// Cria nova venda (campos opcionais)
+  /// Cria nova venda apenas com o plano selecionado
   @action
-  Future<void> criarVenda({
-    PessoaModel? titular,
-    PessoaModel? responsavelFinanceiro,
-    List<PessoaModel>? dependentes,
-    EnderecoModel? endereco,
-    List<ContatoModel>? contatos,
-    PlanModel? plano, // substituindo contrato
-  }) async {
-    final novaVenda = VendaModel(
-      pessoaTitular: titular,
-      pessoaResponsavelFinanceiro: responsavelFinanceiro,
-      dependentes: dependentes ?? [],
-      endereco: endereco,
-      contato: contatos ?? [],
-      plano: plano,
-    );
+  Future<int> criarVendaComPlano(PlanModel? plano) async {
+    final venda = VendaModel(plano: plano);
+    vendas.add(venda);
+    await _saveVendas();
+    return vendas.length - 1;
+  }
 
-    vendas.add(novaVenda);
+  /// Atualiza titular da venda
+  @action
+  Future<void> atualizarTitular(int index, PessoaModel titular) async {
+    vendas[index] = vendas[index].copyWith(pessoaTitular: titular);
     await _saveVendas();
   }
 
-  /// Remove venda pelo índice
+  /// Atualiza endereço
+  @action
+  Future<void> atualizarEndereco(int index, EnderecoModel endereco) async {
+    vendas[index] = vendas[index].copyWith(endereco: endereco);
+    await _saveVendas();
+  }
+
+  /// Atualiza responsável financeiro
+  @action
+  Future<void> atualizarResponsavelFinanceiro(int index, PessoaModel resp) async {
+    vendas[index] = vendas[index].copyWith(pessoaResponsavelFinanceiro: resp);
+    await _saveVendas();
+  }
+
+  /// Atualiza dependentes
+  @action
+  Future<void> atualizarDependentes(int index, List<PessoaModel> dependentes) async {
+    vendas[index] = vendas[index].copyWith(dependentes: dependentes);
+    await _saveVendas();
+  }
+
+  /// Atualiza contatos
+  @action
+  Future<void> atualizarContatos(int index, List<ContatoModel> contatos) async {
+    vendas[index] = vendas[index].copyWith(contatos: contatos);
+    await _saveVendas();
+  }
+
+  /// Remove venda
   @action
   Future<void> removerVenda(int index) async {
     vendas.removeAt(index);
     await _saveVendas();
   }
 
-  /// Persiste as vendas
+  /// Salvar local
+  @action
   Future<void> _saveVendas() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = jsonEncode(vendas.map((v) => v.toJson()).toList());
     await prefs.setString(_storageKey, jsonString);
   }
 
-  /// Carrega vendas
+  @action
+Future<void> atualizarPlano(int index, PlanModel plano) async {
+  final venda = vendas[index].copyWith(plano: plano);
+  vendas[index] = venda;
+  await _saveVendas();
+}
+
+  /// Carregar vendas do local
   Future<void> _loadVendas() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = prefs.getString(_storageKey);
     if (jsonString != null) {
-      final List<dynamic> decoded = jsonDecode(jsonString);
+      final List decoded = jsonDecode(jsonString);
       vendas = ObservableList.of(
         decoded.map((e) => VendaModel.fromJson(e)).toList(),
       );

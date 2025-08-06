@@ -13,39 +13,30 @@ abstract class _PlansStoreBase with Store {
   bool isLoading = false;
 
   @observable
-  List<PlanModel> plans = [];
+  ObservableList<PlanModel> plans = ObservableList<PlanModel>();
 
-  /// Mapa para controlar o número de vidas selecionadas por plano
-  @observable
-  ObservableMap<int, int> selectedLives = ObservableMap<int, int>();
-
-  /// Carrega os planos da API
+  /// Carrega planos e seta vidasSelecionadas = 1
   @action
   Future<void> loadPlans() async {
     try {
       isLoading = true;
-      final result = await _service.fetchPlans(); // já retorna List<PlanModel>
-      plans = result;
-
-      // Inicializa as vidas selecionadas como 1 para cada plano
-      for (var plan in plans) {
-        selectedLives[plan.id] = 1;
-      }
+      final result = await _service.fetchPlans();
+      plans = ObservableList.of(
+        result.map((p) => p.copyWith(vidasSelecionadas: 1)).toList(),
+      );
     } catch (e) {
-      plans = [];
+      plans = ObservableList<PlanModel>();
     } finally {
       isLoading = false;
     }
   }
 
-  /// Define quantidade de vidas para um plano
+  /// Atualiza quantidade de vidas para um plano
   @action
   void setLives(int planId, int lives) {
-    selectedLives[planId] = lives;
-  }
-
-  /// Retorna vidas selecionadas de um plano
-  int getLives(int planId) {
-    return selectedLives[planId] ?? 1;
+    final index = plans.indexWhere((p) => p.id == planId);
+    if (index != -1) {
+      plans[index] = plans[index].copyWith(vidasSelecionadas: lives);
+    }
   }
 }

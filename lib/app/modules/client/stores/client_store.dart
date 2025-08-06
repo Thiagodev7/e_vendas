@@ -1,3 +1,4 @@
+import 'package:e_vendas/app/core/model/contato_model.dart';
 import 'package:e_vendas/app/core/model/generic_state_model.dart';
 import 'package:mobx/mobx.dart';
 import '../../../core/model/endereco_model.dart';
@@ -33,7 +34,7 @@ abstract class _ClientStoreBase with Store {
   ObservableList<PessoaModel> dependentes = ObservableList<PessoaModel>();
 
   @observable
-  ObservableList<Map<String, dynamic>> contatos = ObservableList<Map<String, dynamic>>();
+  ObservableList<ContatoModel> contatos = ObservableList<ContatoModel>();
 
   // ------------------------
   // Funções auxiliares
@@ -78,7 +79,7 @@ abstract class _ClientStoreBase with Store {
   }
 
   @action
-  void adicionarContato(Map<String, dynamic> contato) {
+  void adicionarContato(ContatoModel contato) {
     contatos.add(contato);
   }
 
@@ -99,7 +100,7 @@ abstract class _ClientStoreBase with Store {
     List<PessoaModel>? dependentes,
     required EnderecoModel endereco,
     required Map<String, dynamic> contrato,
-    required List<Map<String, dynamic>> contatos,
+    required List<ContatoModel> contatos,
   }) async {
     try {
       errorMessage = null;
@@ -112,11 +113,11 @@ abstract class _ClientStoreBase with Store {
         if (dependentes != null && dependentes.isNotEmpty)
           "dependentes": dependentes.map((d) => d.toJson()).toList(),
         "endereco": endereco.toJson(),
-        "contato": contatos,
+       "contato": contatos.map((c) => c.toJson()).toList(),
         "contrato": contrato,
       };
 
-      await _service.cadastrarCliente(dados);
+      //await _service.cadastrarCliente(dados);
       return true;
     } catch (e) {
       errorMessage = e.toString();
@@ -127,33 +128,33 @@ abstract class _ClientStoreBase with Store {
   }
 
   @observable
-List<GenericStateModel> estadoCivilList = [
-  GenericStateModel(name: 'ESTADO CIVIL', id: 0),
-  GenericStateModel(name: 'UNIÃO ESTÁVEL', id: 1),
-  GenericStateModel(name: 'CASADO(A)', id: 2),
-  GenericStateModel(name: 'DIVORCIADO(A)', id: 3),
-  GenericStateModel(name: 'SEPARADO(A)', id: 5),
-  GenericStateModel(name: 'SOLTEIRO(A)', id: 6),
-  GenericStateModel(name: 'VIÚVO(A)', id: 7),
-  GenericStateModel(name: 'OUTROS', id: 8),
-];
+  List<GenericStateModel> estadoCivilList = [
+    GenericStateModel(name: 'ESTADO CIVIL', id: 0),
+    GenericStateModel(name: 'UNIÃO ESTÁVEL', id: 1),
+    GenericStateModel(name: 'CASADO(A)', id: 2),
+    GenericStateModel(name: 'DIVORCIADO(A)', id: 3),
+    GenericStateModel(name: 'SEPARADO(A)', id: 5),
+    GenericStateModel(name: 'SOLTEIRO(A)', id: 6),
+    GenericStateModel(name: 'VIÚVO(A)', id: 7),
+    GenericStateModel(name: 'OUTROS', id: 8),
+  ];
 
-@observable
-List<GenericStateModel> bondDependentList = [
-  GenericStateModel(name: 'Grau Dependência', id: 0),
-  GenericStateModel(name: 'BENEFICIÁRIO', id: 1),
-  GenericStateModel(name: 'CÔNJUGE/COMPANHEIRO', id: 2),
-  GenericStateModel(name: 'FILHO/FILHA', id: 3),
-  GenericStateModel(name: 'PAI/MÃE/SOGRO/SOGRA', id: 5),
-  GenericStateModel(name: 'AGREGADOS/OUTROS', id: 6),
-  GenericStateModel(name: 'ENTEADO/MENOR SOB GUARDA', id: 7),
-];
+  @observable
+  List<GenericStateModel> bondDependentList = [
+    GenericStateModel(name: 'Grau Dependência', id: 0),
+    GenericStateModel(name: 'BENEFICIÁRIO', id: 1),
+    GenericStateModel(name: 'CÔNJUGE/COMPANHEIRO', id: 2),
+    GenericStateModel(name: 'FILHO/FILHA', id: 3),
+    GenericStateModel(name: 'PAI/MÃE/SOGRO/SOGRA', id: 5),
+    GenericStateModel(name: 'AGREGADOS/OUTROS', id: 6),
+    GenericStateModel(name: 'ENTEADO/MENOR SOB GUARDA', id: 7),
+  ];
 
-@observable
-List<GenericStateModel> contactTypes = [
-  GenericStateModel(name: 'Tipo de Meio de Contato', id: 0),
-  GenericStateModel(name: 'CELULAR', id: 1),
-  GenericStateModel(name: 'TELEFONE FIXO', id: 2),
-  GenericStateModel(name: 'EMAIL', id: 5),
-];
+  @observable
+  List<GenericStateModel> contactTypes = [
+    GenericStateModel(name: 'Tipo de Meio de Contato', id: 0),
+    GenericStateModel(name: 'CELULAR', id: 1),
+    GenericStateModel(name: 'TELEFONE FIXO', id: 2),
+    GenericStateModel(name: 'EMAIL', id: 5),
+  ];
 }

@@ -8,13 +8,11 @@ import 'app_colors.dart';
 class DashboardLayout extends StatefulWidget {
   final Widget child;
   final String? title;
-  final bool showBackButton; // NOVO
 
   const DashboardLayout({
     super.key,
     required this.child,
     this.title,
-    this.showBackButton = true, // default: exibe
   });
 
   @override
@@ -46,6 +44,7 @@ class _DashboardLayoutState extends State<DashboardLayout>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: _buildDrawer(context),
       body: AnimatedBuilder(
         animation: _gradientController,
         builder: (context, child) {
@@ -67,18 +66,29 @@ class _DashboardLayoutState extends State<DashboardLayout>
             child: SafeArea(
               child: Column(
                 children: [
-                  _buildHeader(),
+                  _buildHeader(context),
                   if (widget.title != null)
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        widget.title!,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        SizedBox(
+                         // width: 48, // Espaço para manter alinhamento
                         ),
-                      ),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            widget.title!,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 100, // Espaço para manter alinhamento
+                        ),
+                      ],
                     ),
                   Expanded(
                     child: Container(
@@ -96,50 +106,111 @@ class _DashboardLayoutState extends State<DashboardLayout>
     );
   }
 
-  Widget _buildHeader() {
+  /// Header com menu e logo
+  Widget _buildHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      child: Stack(
-        alignment: Alignment.center,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Botão Voltar (só mostra se habilitado)
-          if (widget.showBackButton)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          // Botão menu (abre drawer)
+          Builder(
+            builder: (ctx) {
+              return IconButton(
+                icon: const Icon(Icons.menu, color: Colors.white),
                 onPressed: () {
-                  Modular.to.pop();
+                  Scaffold.of(ctx).openDrawer();
                 },
+              );
+            },
+          ),
+
+          // Logo clicável
+          GestureDetector(
+            onTap: () {
+              Modular.to.navigate('/home');
+            },
+            child: Image.asset('assets/images/logo_white.png', height: 40),
+          ),
+
+          // Nome vendedor + tema
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                globalStore.vendedorNome,
+                style: const TextStyle(color: Colors.white, fontSize: 16),
               ),
-            ),
-
-          // Logo central
-          Image.asset('assets/images/logo_white.png', height: 40),
-
-          // Nome do vendedor + botão tema
-          Align(
-            alignment: Alignment.centerRight,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  globalStore.vendedorNome,
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
+              const SizedBox(width: 12),
+              IconButton(
+                icon: Icon(
+                  themeStore.isDark ? Icons.dark_mode : Icons.light_mode,
+                  color: Colors.white,
                 ),
-                const SizedBox(width: 12),
-                IconButton(
-                  icon: Icon(
-                    themeStore.isDark ? Icons.dark_mode : Icons.light_mode,
-                    color: Colors.white,
-                  ),
-                  onPressed: () => themeStore.toggleTheme(),
-                ),
-              ],
-            ),
+                onPressed: () => themeStore.toggleTheme(),
+              ),
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  /// Drawer estilizado
+  Drawer _buildDrawer(BuildContext context) {
+    return Drawer(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.primary.withOpacity(0.9), AppColors.secondary],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Image.asset('assets/images/logo_white.png', height: 50),
+                  const SizedBox(height: 10),
+                  Text(
+                    globalStore.vendedorNome,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _buildDrawerItem(Icons.home, 'Home', '/home'),
+            _buildDrawerItem(Icons.shopping_cart, 'Vendas', '/sales'),
+            _buildDrawerItem(Icons.person, 'Clientes', '/client'),
+            _buildDrawerItem(Icons.assignment, 'Planos', '/plans'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Item do Drawer
+  Widget _buildDrawerItem(IconData icon, String title, String route) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.white),
+      title: Text(
+        title,
+        style: const TextStyle(color: Colors.white, fontSize: 16),
+      ),
+      onTap: () {
+        Modular.to.navigate(route);
+      },
     );
   }
 }

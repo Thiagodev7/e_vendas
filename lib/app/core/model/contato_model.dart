@@ -1,15 +1,15 @@
 class ContatoModel {
   final int idMeioComunicacao;
-  final String ddd;
+  final String? ddd;
   final String descricao;
-  final String contato;
+  final String? contato;
   final String nomeContato;
 
   ContatoModel({
     required this.idMeioComunicacao,
-    required this.ddd,
+     this.ddd,
     required this.descricao,
-    required this.contato,
+     this.contato,
     required this.nomeContato,
   });
 

@@ -1,5 +1,6 @@
 import 'package:e_vendas/app/core/stores/global_store.dart';
 import 'package:e_vendas/app/modules/client/client_module.dart';
+import 'package:e_vendas/app/modules/finish_sale/finish_sale_module.dart';
 import 'package:e_vendas/app/modules/plans/plans_module.dart';
 import 'package:e_vendas/app/modules/sales/sales_module.dart';
 import 'package:flutter_modular/flutter_modular.dart';
@@ -21,6 +22,8 @@ class AppModule extends Module {
     r.module('/plans', module: PlansModule());
     r.module('/client', module: ClientModule());
     r.module('/sales', module: SalesModule());
+    r.module('/finish-sale', module: FinishSaleModule());
+    
 
   }
 }

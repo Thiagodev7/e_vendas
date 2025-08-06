@@ -12,6 +12,14 @@ class PlansModule extends Module {
 
   @override
   void routes(r) {
-    r.child('/', child: (context) => const PlansPage());
+    r.child(
+      '/',
+      child: (context) {
+        final args = r.args.data as Map<String, dynamic>?;
+        return PlansPage(
+          vendaIndex: args?['vendaIndex'] as int?,
+        );
+      },
+    );
   }
 }

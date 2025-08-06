@@ -29,31 +29,15 @@ mixin _$PlansStore on _PlansStoreBase, Store {
       Atom(name: '_PlansStoreBase.plans', context: context);
 
   @override
-  List<PlanModel> get plans {
+  ObservableList<PlanModel> get plans {
     _$plansAtom.reportRead();
     return super.plans;
   }
 
   @override
-  set plans(List<PlanModel> value) {
+  set plans(ObservableList<PlanModel> value) {
     _$plansAtom.reportWrite(value, super.plans, () {
       super.plans = value;
-    });
-  }
-
-  late final _$selectedLivesAtom =
-      Atom(name: '_PlansStoreBase.selectedLives', context: context);
-
-  @override
-  ObservableMap<int, int> get selectedLives {
-    _$selectedLivesAtom.reportRead();
-    return super.selectedLives;
-  }
-
-  @override
-  set selectedLives(ObservableMap<int, int> value) {
-    _$selectedLivesAtom.reportWrite(value, super.selectedLives, () {
-      super.selectedLives = value;
     });
   }
 
@@ -83,8 +67,7 @@ mixin _$PlansStore on _PlansStoreBase, Store {
   String toString() {
     return '''
 isLoading: ${isLoading},
-plans: ${plans},
-selectedLives: ${selectedLives}
+plans: ${plans}
     ''';
   }
 }

@@ -126,13 +126,13 @@ mixin _$ClientStore on _ClientStoreBase, Store {
       Atom(name: '_ClientStoreBase.contatos', context: context);
 
   @override
-  ObservableList<Map<String, dynamic>> get contatos {
+  ObservableList<ContatoModel> get contatos {
     _$contatosAtom.reportRead();
     return super.contatos;
   }
 
   @override
-  set contatos(ObservableList<Map<String, dynamic>> value) {
+  set contatos(ObservableList<ContatoModel> value) {
     _$contatosAtom.reportWrite(value, super.contatos, () {
       super.contatos = value;
     });
@@ -212,7 +212,7 @@ mixin _$ClientStore on _ClientStoreBase, Store {
       List<PessoaModel>? dependentes,
       required EnderecoModel endereco,
       required Map<String, dynamic> contrato,
-      required List<Map<String, dynamic>> contatos}) {
+      required List<ContatoModel> contatos}) {
     return _$salvarClienteAsyncAction.run(() => super.salvarCliente(
         titular: titular,
         responsavelFinanceiro: responsavelFinanceiro,
@@ -248,7 +248,7 @@ mixin _$ClientStore on _ClientStoreBase, Store {
   }
 
   @override
-  void adicionarContato(Map<String, dynamic> contato) {
+  void adicionarContato(ContatoModel contato) {
     final _$actionInfo = _$_ClientStoreBaseActionController.startAction(
         name: '_ClientStoreBase.adicionarContato');
     try {

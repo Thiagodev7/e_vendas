@@ -1,5 +1,8 @@
+import 'package:e_vendas/app/core/model/contato_model.dart';
 import 'package:e_vendas/app/core/model/generic_state_model.dart';
 import 'package:e_vendas/app/core/model/pessoa_model.dart';
+import 'package:e_vendas/app/core/model/plano_model.dart';
+import 'package:e_vendas/app/modules/sales/stores/sales_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -12,9 +15,10 @@ import '../../../core/utils/responsive_helper.dart';
 import '../stores/client_store.dart';
 
 class ClientFormPage extends StatefulWidget {
-  final Map<String, dynamic>? selectedPlan;
+  final PlanModel? selectedPlan;
+  final int? vendaIndex; // índice da venda em andamento (para edição)
 
-  const ClientFormPage({super.key, this.selectedPlan});
+  const ClientFormPage({super.key, this.selectedPlan, this.vendaIndex});
 
   @override
   State<ClientFormPage> createState() => _ClientFormPageState();
@@ -22,6 +26,7 @@ class ClientFormPage extends StatefulWidget {
 
 class _ClientFormPageState extends State<ClientFormPage> {
   final store = Modular.get<ClientStore>();
+  final salesStore = Modular.get<SalesStore>();
   final _formKey = GlobalKey<FormState>();
 
   // Controllers
@@ -50,7 +55,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return DashboardLayout(
-      showBackButton: true,
       title: 'Cadastrar Cliente',
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -80,7 +84,7 @@ class _ClientFormPageState extends State<ClientFormPage> {
                               _buildSelectedPlan(widget.selectedPlan!, isDark),
                             const SizedBox(height: 20),
 
-                            // Responsivo: dados e endereço lado a lado no desktop
+                            // Responsivo: dados e endereço lado a lado
                             if (ResponsiveHelper.isDesktop(context)) ...[
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,10 +101,9 @@ class _ClientFormPageState extends State<ClientFormPage> {
                               _buildCardEndereco(isDark),
                             ],
 
-                            // Após Card Endereço
                             const SizedBox(height: 20),
 
-// Responsivo: Responsável Financeiro + Dependentes lado a lado no desktop
+                            // Responsável financeiro e dependentes lado a lado
                             if (ResponsiveHelper.isDesktop(context)) ...[
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -130,7 +133,7 @@ class _ClientFormPageState extends State<ClientFormPage> {
                       ),
                     ),
 
-                    // Mensagem de erro flutuante
+                    // Mensagem de erro
                     if (store.errorMessage != null && !store.isLoading)
                       Positioned(
                         bottom: 16,
@@ -158,8 +161,11 @@ class _ClientFormPageState extends State<ClientFormPage> {
     );
   }
 
-  /// Plano selecionado
-  Widget _buildSelectedPlan(Map<String, dynamic> plan, bool isDark) {
+  // =====================
+  // PLANO SELECIONADO
+  // =====================
+
+  Widget _buildSelectedPlan(PlanModel plan, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(12),
@@ -171,19 +177,24 @@ class _ClientFormPageState extends State<ClientFormPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Plano Selecionado: ${plan['plano']}',
+          Text('Plano Selecionado: ${plan.nomeContrato}',
               style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : Colors.black)),
-          Text('Vidas: ${plan['vidas']}'),
-          Text('Mensalidade: R\$ ${plan['valorMensal']}'),
-          Text('Adesão: R\$ ${plan['valorAdesao']}'),
+          Text('Vidas: ${plan.vidasSelecionadas}'),
+          Text('Mensalidade: R\$ ${plan.getMensalidade()}'),
+          Text('Mensalidade total: R\$ ${plan.getMensalidadeTotal()}'),
+          Text('Adesão: R\$ ${plan.getTaxaAdesao()}'),
+          Text('Adesão total: R\$ ${plan.getTaxaAdesaoTotal()}'),
         ],
       ),
     );
   }
 
-  /// Card Dados Pessoais
+  // =====================
+  // CARDS DE FORM
+  // =====================
+
   Widget _buildCardDadosPessoais(bool isDark) {
     final pessoa = store.titular;
 
@@ -209,7 +220,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
     );
   }
 
-  /// Card Endereço
   Widget _buildCardEndereco(bool isDark) {
     final endereco = store.endereco;
 
@@ -236,7 +246,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
     );
   }
 
-  /// Card Responsável Financeiro
   Widget _buildCardResponsavelFinanceiro(bool isDark) {
     return _buildCardContainer(
       title: 'Responsável Financeiro',
@@ -248,9 +257,7 @@ class _ClientFormPageState extends State<ClientFormPage> {
             onPressed: () => _openModalPessoa(isDark, isResponsavel: true),
             icon: const Icon(Icons.person_add),
             label: const Text('Adicionar Responsável'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
           ),
           const SizedBox(height: 8),
           Observer(builder: (_) {
@@ -271,7 +278,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
     );
   }
 
-  /// Card Dependentes
   Widget _buildCardDependentes(bool isDark) {
     return _buildCardContainer(
       title: 'Dependentes',
@@ -283,9 +289,7 @@ class _ClientFormPageState extends State<ClientFormPage> {
             onPressed: () => _openModalPessoa(isDark, isResponsavel: false),
             icon: const Icon(Icons.group_add),
             label: const Text('Adicionar Dependente'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
           ),
           const SizedBox(height: 8),
           Observer(builder: (_) {
@@ -314,7 +318,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
     );
   }
 
-  /// Card Contatos
   Widget _buildCardContatos(bool isDark) {
     return _buildCardContainer(
       title: 'Contatos',
@@ -326,9 +329,7 @@ class _ClientFormPageState extends State<ClientFormPage> {
             onPressed: () => _openModalContato(),
             icon: const Icon(Icons.add_call),
             label: const Text('Adicionar Contato'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
           ),
           const SizedBox(height: 8),
           Observer(builder: (_) {
@@ -340,8 +341,8 @@ class _ClientFormPageState extends State<ClientFormPage> {
                 final contato = store.contatos[index];
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: Text('${contato['descricao']}'),
-                  subtitle: Text(contato['nome_contato'] ?? ''),
+                  title: Text(contato.descricao),
+                  subtitle: Text(contato.nomeContato ?? ''),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete, color: Colors.red),
                     onPressed: () => store.removerContato(index),
@@ -355,7 +356,10 @@ class _ClientFormPageState extends State<ClientFormPage> {
     );
   }
 
-  /// Botão principal
+  // =====================
+  // BOTÃO SALVAR
+  // =====================
+
   Widget _buildSubmitButton() {
     return SizedBox(
       width: double.infinity,
@@ -369,39 +373,54 @@ class _ClientFormPageState extends State<ClientFormPage> {
         onPressed: store.isLoading
             ? null
             : () async {
-                if (_formKey.currentState!.validate() &&
-                    store.titular != null &&
-                    store.endereco != null) {
-                  final success = await store.salvarCliente(
-                    titular: store.titular!,
-                    endereco: store.endereco!,
-                    contrato: widget.selectedPlan ?? {},
-                    dependentes: store.dependentes.toList(),
-                    responsavelFinanceiro: store.responsavelFinanceiro,
-                    contatos: store.contatos.toList(),
-                  );
+                if (!_formKey.currentState!.validate()) return;
 
-                  if (success) {
-                    _showSnackBar(
-                        'Cliente cadastrado com sucesso', Colors.green);
-                    Modular.to.pop();
-                  } else if (store.errorMessage != null) {
-                    _showSnackBar(store.errorMessage!, Colors.red);
-                  }
+                if (store.titular == null || store.endereco == null) {
+                  _showSnackBar(
+                      'Preencha os dados do titular e endereço', Colors.red);
+                  return;
                 }
+
+                // Pega o plano (se existir)
+                PlanModel? plan = widget.selectedPlan != null
+                    ? widget.selectedPlan!
+                    : null;
+
+                if (widget.vendaIndex == null) {
+                  // Nova venda
+                  final index = await salesStore.criarVendaComPlano(plan);
+                  await _salvarDadosVenda(index);
+                } else {
+                  // Atualiza venda existente
+                  await _salvarDadosVenda(widget.vendaIndex!);
+                }
+
+                _showSnackBar('Venda salva com sucesso', Colors.green);
+                Modular.to.navigate('/sales');
               },
         child: store.isLoading
             ? const CircularProgressIndicator(color: Colors.white)
             : const Text(
-                'Cadastrar Cliente',
+                'Salvar Cliente',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
       ),
     );
   }
 
+  Future<void> _salvarDadosVenda(int index) async {
+    await salesStore.atualizarTitular(index, store.titular!);
+    await salesStore.atualizarEndereco(index, store.endereco!);
+    await salesStore.atualizarDependentes(index, store.dependentes.toList());
+    await salesStore.atualizarContatos(index, store.contatos.toList());
+    if (store.responsavelFinanceiro != null) {
+      await salesStore.atualizarResponsavelFinanceiro(
+          index, store.responsavelFinanceiro!);
+    }
+  }
+
   // =====================
-  // COMPONENTES REUTILIZÁVEIS
+  // UTILITÁRIOS DE FORM
   // =====================
 
   Widget _buildCpfField() {
@@ -576,7 +595,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // CPF
                   TextFormField(
                     controller: cpfModalController,
                     decoration: const InputDecoration(labelText: 'CPF'),
@@ -584,8 +602,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
                     inputFormatters: [cpfMaskModal],
                   ),
                   const SizedBox(height: 12),
-
-                  // Buscar CPF
                   ElevatedButton(
                     onPressed: () async {
                       await store.buscarCpf(cpfMaskModal.getUnmaskedText());
@@ -600,8 +616,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
                     child: const Text('Buscar'),
                   ),
                   const SizedBox(height: 12),
-
-                  // Dados encontrados
                   if (pessoaEncontrada != null) ...[
                     _buildInfoText('Nome', pessoaEncontrada!.nome),
                     _buildInfoText(
@@ -610,8 +624,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
                     _buildInfoText('Pai', pessoaEncontrada!.nomePai),
                   ],
                   const SizedBox(height: 12),
-
-                  // Estado Civil
                   Observer(builder: (_) {
                     return DropdownButtonFormField<GenericStateModel>(
                       value: estadoCivilSelecionado,
@@ -627,8 +639,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
                           : null,
                     );
                   }),
-
-                  // Se for dependente, mostra grau de dependência
                   if (!isResponsavel) ...[
                     const SizedBox(height: 12),
                     Observer(builder: (_) {
@@ -665,7 +675,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
                       ? () {
                           final pessoa = pessoaEncontrada!.copyWith(
                             idEstadoCivil: estadoCivilSelecionado!.id,
-                            // Se precisar salvar grau de dependência no JSON
                             idGrauDependencia: !isResponsavel
                                 ? grauDependenciaSelecionado!.id
                                 : null,
@@ -692,7 +701,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
   }
 
   void _openModalContato() {
-    //final dddController = TextEditingController();
     final descricaoController = TextEditingController();
     final nomeController = TextEditingController();
     GenericStateModel? tipoContatoSelecionado;
@@ -742,11 +750,13 @@ class _ClientFormPageState extends State<ClientFormPage> {
                       _showSnackBar('Selecione o tipo de contato', Colors.red);
                       return;
                     }
-                    store.adicionarContato({
-                      'id_meio_comunicacao': tipoContatoSelecionado!.id,
-                      'descricao': descricaoController.text,
-                      'nome_contato': nomeController.text,
-                    });
+                    store.adicionarContato(
+                      ContatoModel(
+                        idMeioComunicacao: tipoContatoSelecionado!.id,
+                        descricao: descricaoController.text,
+                        nomeContato: nomeController.text,
+                      ),
+                    );
                     Navigator.pop(ctx);
                   },
                   style: ElevatedButton.styleFrom(
