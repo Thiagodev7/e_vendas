@@ -8,7 +8,6 @@ import 'package:e_vendas/app/core/model/plano_model.dart';
 import 'package:e_vendas/app/core/model/venda_model.dart';
 import 'package:e_vendas/app/core/stores/global_store.dart';
 import 'package:e_vendas/app/modules/sales/services/sales_service.dart';
-import 'package:flutter_modular/flutter_modular.dart';
 import 'package:mobx/mobx.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,8 +17,8 @@ class SalesStore = _SalesStoreBase with _$SalesStore;
 
 abstract class _SalesStoreBase with Store {
   final String _storageKey = "vendas_abertas";
-  final SalesService _service = SalesService();
-  final GlobalStore _globalStore = Modular.get<GlobalStore>();
+  final SalesService _service;
+  final GlobalStore _globalStore;
 
   @observable
   ObservableList<VendaModel> vendas = ObservableList<VendaModel>();
@@ -30,40 +29,22 @@ abstract class _SalesStoreBase with Store {
   @observable
   String? errorMessage;
 
-  _SalesStoreBase() {
-    // Inicia a store carregando os dados locais (para UI rápida)
-    // e imediatamente busca os dados mais recentes do servidor.
-    _loadVendasFromLocal();
-  }
+  _SalesStoreBase(this._service, this._globalStore);
 
-  /// Busca as propostas abertas do backend e atualiza o estado da store.
-  /// Este método é chamado pela SalesPage ao ser iniciada.
+  /// Busca as vendas abertas do backend e atualiza o estado da store.
   @action
-  Future<void> syncOpenProposals() async {
-    
+  Future<void> fetchVendas() async {
+    isLoading = true;
     errorMessage = null;
     try {
-      // Pega o ID do vendedor logado a partir do GlobalStore.
-      //final vendedorId = _globalStore.vendedor?['id'];
-      final vendedorId = 22;
+      final vendedorId = _globalStore.vendedor?['id'];
       if (vendedorId == null) {
         throw Exception("Vendedor não identificado. Faça login novamente.");
       }
 
-      final propostasJson = await _service.getOpenProposals(vendedorId);
-      
-      // Usa o construtor factory `fromProposalJson` para converter os dados da API
-      // em uma lista de VendaModel.
-      final propostasConvertidas = propostasJson
-          .map((json) => VendaModel.fromJson(json))
-          .toList();
-
-      // Substitui a lista de vendas atual pelos dados frescos do servidor.
-      vendas = ObservableList.of(propostasConvertidas);
-
-      // Salva a nova lista no armazenamento local para acesso offline.
+      final lista = await _service.fetchOpenSales(vendedorId);
+      vendas = ObservableList.of(lista);
       await _saveVendas();
-
     } catch (e) {
       errorMessage = e.toString().replaceFirst('Exception: ', '');
     } finally {
@@ -73,6 +54,7 @@ abstract class _SalesStoreBase with Store {
 
   /// Carrega as vendas salvas localmente no SharedPreferences.
   @action
+  // ignore: unused_element
   Future<void> _loadVendasFromLocal() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = prefs.getString(_storageKey);
