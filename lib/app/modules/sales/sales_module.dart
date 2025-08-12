@@ -1,15 +1,21 @@
+import 'package:e_vendas/app/core/stores/global_store.dart';
+import 'package:e_vendas/app/modules/sales/services/sales_service.dart';
 import 'package:flutter_modular/flutter_modular.dart';
+
 import 'pages/sales_page.dart';
 import 'stores/sales_store.dart';
 
 class SalesModule extends Module {
   @override
   void binds(i) {
-    i.addLazySingleton(SalesStore.new);
+    i.addLazySingleton(SalesService.new);
+    i.addLazySingleton<SalesStore>(
+      () => SalesStore(i.get<SalesService>(), i.get<GlobalStore>()),
+    );
   }
 
   @override
   void routes(r) {
-    r.child('/', child: (context) => SalesPage());
+    r.child('/', child: (context) => const SalesPage());
   }
 }
