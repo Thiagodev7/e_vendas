@@ -24,6 +24,14 @@ mixin _$SalesStore on _SalesStoreBase, Store {
       super.vendas = value;
     });
   }
+  late final _$fetchVendasAsyncAction =
+      AsyncAction('_SalesStoreBase.fetchVendas', context: context);
+
+  @override
+  Future<void> fetchVendas() {
+    return _$fetchVendasAsyncAction.run(() => super.fetchVendas());
+  }
+
 
   late final _$criarVendaComPlanoAsyncAction =
       AsyncAction('_SalesStoreBase.criarVendaComPlano', context: context);
