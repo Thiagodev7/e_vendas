@@ -80,6 +80,15 @@ mixin _$SalesStore on _SalesStoreBase, Store {
         .run(() => super.atualizarContatos(index, contatos));
   }
 
+  late final _$atualizarPlanoAsyncAction =
+      AsyncAction('_SalesStoreBase.atualizarPlano', context: context);
+
+  @override
+  Future<void> atualizarPlano(int index, PlanModel plano) {
+    return _$atualizarPlanoAsyncAction
+        .run(() => super.atualizarPlano(index, plano));
+  }
+
   late final _$removerVendaAsyncAction =
       AsyncAction('_SalesStoreBase.removerVenda', context: context);
 
@@ -88,21 +97,20 @@ mixin _$SalesStore on _SalesStoreBase, Store {
     return _$removerVendaAsyncAction.run(() => super.removerVenda(index));
   }
 
+  late final _$finalizarVendaAsyncAction =
+      AsyncAction('_SalesStoreBase.finalizarVenda', context: context);
+
+  @override
+  Future<void> finalizarVenda(int index) {
+    return _$finalizarVendaAsyncAction.run(() => super.finalizarVenda(index));
+  }
+
   late final _$_saveVendasAsyncAction =
       AsyncAction('_SalesStoreBase._saveVendas', context: context);
 
   @override
   Future<void> _saveVendas() {
     return _$_saveVendasAsyncAction.run(() => super._saveVendas());
-  }
-
-  late final _$atualizarPlanoAsyncAction =
-      AsyncAction('_SalesStoreBase.atualizarPlano', context: context);
-
-  @override
-  Future<void> atualizarPlano(int index, PlanModel plano) {
-    return _$atualizarPlanoAsyncAction
-        .run(() => super.atualizarPlano(index, plano));
   }
 
   @override

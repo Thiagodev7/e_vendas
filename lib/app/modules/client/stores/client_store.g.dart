@@ -186,6 +186,32 @@ mixin _$ClientStore on _ClientStoreBase, Store {
     });
   }
 
+  late final _$saveToLocalStorageAsyncAction =
+      AsyncAction('_ClientStoreBase.saveToLocalStorage', context: context);
+
+  @override
+  Future<void> saveToLocalStorage() {
+    return _$saveToLocalStorageAsyncAction
+        .run(() => super.saveToLocalStorage());
+  }
+
+  late final _$loadFromLocalStorageAsyncAction =
+      AsyncAction('_ClientStoreBase.loadFromLocalStorage', context: context);
+
+  @override
+  Future<void> loadFromLocalStorage() {
+    return _$loadFromLocalStorageAsyncAction
+        .run(() => super.loadFromLocalStorage());
+  }
+
+  late final _$clearLocalStorageAsyncAction =
+      AsyncAction('_ClientStoreBase.clearLocalStorage', context: context);
+
+  @override
+  Future<void> clearLocalStorage() {
+    return _$clearLocalStorageAsyncAction.run(() => super.clearLocalStorage());
+  }
+
   late final _$buscarCepAsyncAction =
       AsyncAction('_ClientStoreBase.buscarCep', context: context);
 
@@ -200,26 +226,6 @@ mixin _$ClientStore on _ClientStoreBase, Store {
   @override
   Future<void> buscarCpf(String cpf) {
     return _$buscarCpfAsyncAction.run(() => super.buscarCpf(cpf));
-  }
-
-  late final _$salvarClienteAsyncAction =
-      AsyncAction('_ClientStoreBase.salvarCliente', context: context);
-
-  @override
-  Future<bool> salvarCliente(
-      {required PessoaModel titular,
-      PessoaModel? responsavelFinanceiro,
-      List<PessoaModel>? dependentes,
-      required EnderecoModel endereco,
-      required Map<String, dynamic> contrato,
-      required List<ContatoModel> contatos}) {
-    return _$salvarClienteAsyncAction.run(() => super.salvarCliente(
-        titular: titular,
-        responsavelFinanceiro: responsavelFinanceiro,
-        dependentes: dependentes,
-        endereco: endereco,
-        contrato: contrato,
-        contatos: contatos));
   }
 
   late final _$_ClientStoreBaseActionController =

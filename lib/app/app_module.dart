@@ -23,7 +23,5 @@ class AppModule extends Module {
     r.module('/client', module: ClientModule());
     r.module('/sales', module: SalesModule());
     r.module('/finish-sale', module: FinishSaleModule());
-    
-
   }
 }

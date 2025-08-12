@@ -55,10 +55,9 @@ class _PlansPageState extends State<PlansPage> {
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                 itemCount: plans.length,
                 itemBuilder: (context, index) {
-                  // OBSERVER AQUI GARANTE REBUILD AO ALTERAR VIDAS
                   return Observer(
                     builder: (_) {
-                      final plan = store.plans[index]; // Sempre atualizado
+                      final plan = plans[index];
                       return Container(
                         width: cardWidth,
                         height: cardHeight,
@@ -79,11 +78,17 @@ class _PlansPageState extends State<PlansPage> {
 
   /// Card do Plano
   Widget _buildHorizontalCard(PlanModel plan, int? vendaIndex) {
-    final mensal = plan.getMensalidade();
-    final adesao = plan.getTaxaAdesao();
+    // Pega quantidade de vidas selecionadas
+    final vidas = store.getLives(plan.id);
+
+    // Calcula valores multiplicando pelas vidas
+    final mensal =
+        (double.parse(plan.getMensalidade()) * vidas).toStringAsFixed(2);
+    final adesao =
+        (double.parse(plan.getTaxaAdesao()) * vidas).toStringAsFixed(2);
+
     final cobertura = PlanoInfo.getInfo(plan.nomeContrato);
 
-    // Benefícios
     final beneficios = cobertura
         .split('\n')
         .where((line) => line.startsWith('☑️'))
@@ -107,7 +112,7 @@ class _PlansPageState extends State<PlansPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header com nome do plano
+          // Header
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
@@ -139,7 +144,7 @@ class _PlansPageState extends State<PlansPage> {
                 const Text('Vidas:', style: TextStyle(fontSize: 14)),
                 Row(
                   children: [1, 2, 3, 4].map((v) {
-                    final isSelected = v == plan.vidasSelecionadas;
+                    final isSelected = v == vidas;
                     return GestureDetector(
                       onTap: () => store.setLives(plan.id, v),
                       child: Container(
@@ -225,12 +230,18 @@ class _PlansPageState extends State<PlansPage> {
                   ),
                 ),
                 onPressed: () async {
+                  int vidas = 1;
                   if (vendaIndex != null) {
-                    // Atualiza o plano na venda existente
-                    await salesStore.atualizarPlano(vendaIndex, plan);
+                    final venda = salesStore.vendas[vendaIndex];
+                    vidas = (venda.dependentes?.length ?? 0) + 1;
+
+                    // Atualiza plano com vidas
+                    final planoComVidas =
+                        plan.copyWith(vidasSelecionadas: vidas);
+                    await salesStore.atualizarPlano(vendaIndex, planoComVidas);
                   } else {
-                    // Cria nova venda
-                    await salesStore.criarVendaComPlano(plan);
+                    final planoComVidas = plan.copyWith(vidasSelecionadas: 1);
+                    await salesStore.criarVendaComPlano(planoComVidas);
                   }
 
                   Modular.to.navigate('/sales');
@@ -247,7 +258,6 @@ class _PlansPageState extends State<PlansPage> {
     );
   }
 
-  /// Caixa com valor
   Widget _buildValueBox(String label, String valor) {
     return Container(
       padding: const EdgeInsets.all(8),

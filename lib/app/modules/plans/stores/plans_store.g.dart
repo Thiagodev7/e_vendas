@@ -41,6 +41,22 @@ mixin _$PlansStore on _PlansStoreBase, Store {
     });
   }
 
+  late final _$selectedLivesAtom =
+      Atom(name: '_PlansStoreBase.selectedLives', context: context);
+
+  @override
+  ObservableMap<int, int> get selectedLives {
+    _$selectedLivesAtom.reportRead();
+    return super.selectedLives;
+  }
+
+  @override
+  set selectedLives(ObservableMap<int, int> value) {
+    _$selectedLivesAtom.reportWrite(value, super.selectedLives, () {
+      super.selectedLives = value;
+    });
+  }
+
   late final _$loadPlansAsyncAction =
       AsyncAction('_PlansStoreBase.loadPlans', context: context);
 
@@ -67,7 +83,8 @@ mixin _$PlansStore on _PlansStoreBase, Store {
   String toString() {
     return '''
 isLoading: ${isLoading},
-plans: ${plans}
+plans: ${plans},
+selectedLives: ${selectedLives}
     ''';
   }
 }

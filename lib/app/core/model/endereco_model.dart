@@ -1,3 +1,5 @@
+// lib/app/core/model/endereco_model.dart
+
 /// Modelo que representa o endereço do cliente
 class EnderecoModel {
   final int idCidade;
@@ -37,17 +39,28 @@ class EnderecoModel {
     };
   }
 
-  /// Cria o modelo a partir de um JSON
+  /// **CORRIGIDO:** Cria o modelo a partir de um JSON, tratando o tipo do campo 'numero'.
   factory EnderecoModel.fromJson(Map<String, dynamic> json) {
+    // Lógica para converter o campo 'numero' de forma segura
+    int numeroConvertido = 0;
+    final numeroJson = json['numero'];
+
+    if (numeroJson is int) {
+      numeroConvertido = numeroJson;
+    } else if (numeroJson is String) {
+      // Tenta converter a String para int. Se falhar, usa 0.
+      numeroConvertido = int.tryParse(numeroJson) ?? 0;
+    }
+
     return EnderecoModel(
       idCidade: json["id_cidade"] ?? 0,
       idTipoLogradouro: json["id_tipo_logradouro"] ?? 1, // Padrão: Rua
-      nomeCidade: json["localidade"] ?? '',
-      siglaUf: json["uf"] ?? '',
+      nomeCidade: json["nome_cidade"] ?? json["localidade"] ?? '',
+      siglaUf: json["sigla_uf"] ?? json["uf"] ?? '',
       cep: json["cep"] ?? '',
       bairro: json["bairro"] ?? '',
       logradouro: json["logradouro"] ?? '',
-      numero: json["numero"] ?? 0,
+      numero: numeroConvertido, // << USA O VALOR CONVERTIDO
       complemento: json["complemento"] ?? '',
     );
   }

@@ -1,8 +1,10 @@
-import 'package:e_vendas/app/core/model/contato_model.dart';
-import 'package:e_vendas/app/core/model/generic_state_model.dart';
+import 'dart:convert';
 import 'package:mobx/mobx.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/model/contato_model.dart';
 import '../../../core/model/endereco_model.dart';
 import '../../../core/model/pessoa_model.dart';
+import '../../../core/model/generic_state_model.dart';
 import '../services/client_service.dart';
 
 part 'client_store.g.dart';
@@ -36,9 +38,66 @@ abstract class _ClientStoreBase with Store {
   @observable
   ObservableList<ContatoModel> contatos = ObservableList<ContatoModel>();
 
-  // ------------------------
-  // Funções auxiliares
-  // ------------------------
+  static const String storageKey = "client_form_data";
+
+  // =======================
+  // Persistência Local
+  // =======================
+
+  @action
+  Future<void> saveToLocalStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = {
+  "titular": titular?.toJson(),
+      "endereco": endereco?.toJson(),
+      "responsavelFinanceiro": responsavelFinanceiro?.toJson(),
+      "dependentes": dependentes.map((d) => d.toJson()).toList(),
+      "contatos": contatos.map((c) => c.toJson()).toList(),
+    };
+    prefs.setString(storageKey, jsonEncode(data));
+  }
+
+  @action
+  Future<void> loadFromLocalStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString(storageKey);
+    if (jsonString == null) return;
+
+    final data = jsonDecode(jsonString);
+
+    titular = data["titular"] != null ? PessoaModel.fromJson(data["titular"]) : null;
+    endereco = data["endereco"] != null ? EnderecoModel.fromJson(data["endereco"]) : null;
+    responsavelFinanceiro = data["responsavelFinanceiro"] != null
+        ? PessoaModel.fromJson(data["responsavelFinanceiro"])
+        : null;
+    dependentes = ObservableList.of((data["dependentes"] as List)
+        .map((e) => PessoaModel.fromJson(e))
+        .toList());
+    contatos = ObservableList.of(
+        (data["contatos"] as List).map((e) => ContatoModel.fromJson(e)).toList());
+  }
+
+  @action
+  Future<void> clearLocalStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(storageKey);
+  }
+
+  // =======================
+  // Validação de contatos
+  // =======================
+
+  bool validarContatosObrigatorios() {
+    final temCelular = contatos.any(
+        (c) => c.idMeioComunicacao == 1 && (c.descricao.isNotEmpty));
+    final temEmail = contatos.any(
+        (c) => c.idMeioComunicacao == 5 && (c.descricao.isNotEmpty));
+    return temCelular && temEmail;
+  }
+
+  // =======================
+  // Ações
+  // =======================
 
   @action
   Future<void> buscarCep(String cep) async {
@@ -46,6 +105,7 @@ abstract class _ClientStoreBase with Store {
       errorMessage = null;
       isLoading = true;
       endereco = await _service.buscarCep(cep);
+      await saveToLocalStorage();
     } catch (e) {
       errorMessage = e.toString();
       endereco = null;
@@ -60,6 +120,8 @@ abstract class _ClientStoreBase with Store {
       errorMessage = null;
       isLoading = true;
       pessoa = await _service.buscarPorCpf(cpf);
+      pessoa?.cpf = cpf;
+      await saveToLocalStorage();
     } catch (e) {
       errorMessage = e.toString();
       pessoa = null;
@@ -71,60 +133,31 @@ abstract class _ClientStoreBase with Store {
   @action
   void adicionarDependente(PessoaModel dependente) {
     dependentes.add(dependente);
+    saveToLocalStorage();
   }
 
   @action
   void removerDependente(int index) {
     dependentes.removeAt(index);
+    saveToLocalStorage();
   }
 
   @action
   void adicionarContato(ContatoModel contato) {
     contatos.add(contato);
+    saveToLocalStorage();
   }
 
   @action
   void removerContato(int index) {
     contatos.removeAt(index);
+    saveToLocalStorage();
   }
 
   @action
   void setResponsavelFinanceiro(PessoaModel responsavel) {
     responsavelFinanceiro = responsavel;
-  }
-
-  @action
-  Future<bool> salvarCliente({
-    required PessoaModel titular,
-    PessoaModel? responsavelFinanceiro,
-    List<PessoaModel>? dependentes,
-    required EnderecoModel endereco,
-    required Map<String, dynamic> contrato,
-    required List<ContatoModel> contatos,
-  }) async {
-    try {
-      errorMessage = null;
-      isLoading = true;
-
-      final dados = {
-        "pessoa_titular": titular.toJson(),
-        if (responsavelFinanceiro != null)
-          "pessoa_responsavel_financeiro": responsavelFinanceiro.toJson(),
-        if (dependentes != null && dependentes.isNotEmpty)
-          "dependentes": dependentes.map((d) => d.toJson()).toList(),
-        "endereco": endereco.toJson(),
-       "contato": contatos.map((c) => c.toJson()).toList(),
-        "contrato": contrato,
-      };
-
-      //await _service.cadastrarCliente(dados);
-      return true;
-    } catch (e) {
-      errorMessage = e.toString();
-      return false;
-    } finally {
-      isLoading = false;
-    }
+    saveToLocalStorage();
   }
 
   @observable

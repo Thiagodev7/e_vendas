@@ -16,7 +16,7 @@ import '../stores/client_store.dart';
 
 class ClientFormPage extends StatefulWidget {
   final PlanModel? selectedPlan;
-  final int? vendaIndex; // índice da venda em andamento (para edição)
+  final int? vendaIndex;
 
   const ClientFormPage({super.key, this.selectedPlan, this.vendaIndex});
 
@@ -42,6 +42,12 @@ class _ClientFormPageState extends State<ClientFormPage> {
   GenericStateModel? estadoCivilTitular;
 
   @override
+void initState() {
+  super.initState();
+  carregarVendaExistente();
+}
+
+  @override
   void dispose() {
     cpfController.dispose();
     cepController.dispose();
@@ -49,6 +55,48 @@ class _ClientFormPageState extends State<ClientFormPage> {
     complementoController.dispose();
     super.dispose();
   }
+
+  void carregarVendaExistente() {
+    if (widget.selectedPlan == null) return;
+  if (widget.vendaIndex == null) return;
+
+  final venda = salesStore.vendas[widget.vendaIndex!];
+
+  // Titular
+  if (venda.pessoaTitular != null) {
+    store.titular = venda.pessoaTitular;
+    cpfController.text = venda.pessoaTitular!.cpf ?? '';
+    estadoCivilTitular = store.estadoCivilList.firstWhere(
+      (e) => e.id == venda.pessoaTitular!.idEstadoCivil,
+      orElse: () => store.estadoCivilList.first,
+    );
+  }
+
+  // Endereço
+  if (venda.endereco != null) {
+    store.endereco = venda.endereco;
+    cepController.text = venda.endereco!.cep ?? '';
+    numeroController.text = venda.endereco!.numero.toString() ?? '';
+    complementoController.text = venda.endereco!.complemento ?? '';
+  }
+
+  // Responsável Financeiro
+  if (venda.pessoaResponsavelFinanceiro != null) {
+    store.responsavelFinanceiro = venda.pessoaResponsavelFinanceiro;
+  }
+
+  // Dependentes
+  if (venda.dependentes != null && venda.dependentes!.isNotEmpty) {
+    store.dependentes.clear();
+    store.dependentes.addAll(venda.dependentes!);
+  }
+
+  // Contatos
+  if (venda.contatos != null && venda.contatos!.isNotEmpty) {
+    store.contatos.clear();
+    store.contatos.addAll(venda.contatos!);
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +132,7 @@ class _ClientFormPageState extends State<ClientFormPage> {
                               _buildSelectedPlan(widget.selectedPlan!, isDark),
                             const SizedBox(height: 20),
 
-                            // Responsivo: dados e endereço lado a lado
+                            // Responsivo
                             if (ResponsiveHelper.isDesktop(context)) ...[
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -103,7 +151,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
 
                             const SizedBox(height: 20),
 
-                            // Responsável financeiro e dependentes lado a lado
                             if (ResponsiveHelper.isDesktop(context)) ...[
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,8 +179,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
                         ),
                       ),
                     ),
-
-                    // Mensagem de erro
                     if (store.errorMessage != null && !store.isLoading)
                       Positioned(
                         bottom: 16,
@@ -161,10 +206,7 @@ class _ClientFormPageState extends State<ClientFormPage> {
     );
   }
 
-  // =====================
-  // PLANO SELECIONADO
-  // =====================
-
+  // Plano Selecionado
   Widget _buildSelectedPlan(PlanModel plan, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -358,8 +400,6 @@ class _ClientFormPageState extends State<ClientFormPage> {
 
   // =====================
   // BOTÃO SALVAR
-  // =====================
-
   Widget _buildSubmitButton() {
     return SizedBox(
       width: double.infinity,
@@ -375,6 +415,12 @@ class _ClientFormPageState extends State<ClientFormPage> {
             : () async {
                 if (!_formKey.currentState!.validate()) return;
 
+                if (!store.validarContatosObrigatorios()) {
+                  _showSnackBar(
+                      'Informe ao menos um celular e um e-mail', Colors.red);
+                  return;
+                }
+
                 if (store.titular == null || store.endereco == null) {
                   _showSnackBar(
                       'Preencha os dados do titular e endereço', Colors.red);
@@ -382,9 +428,8 @@ class _ClientFormPageState extends State<ClientFormPage> {
                 }
 
                 // Pega o plano (se existir)
-                PlanModel? plan = widget.selectedPlan != null
-                    ? widget.selectedPlan!
-                    : null;
+                PlanModel? plan =
+                    widget.selectedPlan;
 
                 if (widget.vendaIndex == null) {
                   // Nova venda
@@ -394,6 +439,8 @@ class _ClientFormPageState extends State<ClientFormPage> {
                   // Atualiza venda existente
                   await _salvarDadosVenda(widget.vendaIndex!);
                 }
+
+                await store.clearLocalStorage();
 
                 _showSnackBar('Venda salva com sucesso', Colors.green);
                 Modular.to.navigate('/sales');
@@ -419,10 +466,7 @@ class _ClientFormPageState extends State<ClientFormPage> {
     }
   }
 
-  // =====================
-  // UTILITÁRIOS DE FORM
-  // =====================
-
+  // Campos e cards
   Widget _buildCpfField() {
     return Row(
       children: [
@@ -504,6 +548,7 @@ class _ClientFormPageState extends State<ClientFormPage> {
     });
   }
 
+  // Containers
   Widget _buildCardContainer({
     required String title,
     required Widget child,
@@ -563,8 +608,7 @@ class _ClientFormPageState extends State<ClientFormPage> {
       SnackBar(content: Text(message), backgroundColor: color),
     );
   }
-
-  // =====================
+// =====================
   // MODAIS
   // =====================
 
