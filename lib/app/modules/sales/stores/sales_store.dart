@@ -8,6 +8,10 @@ import 'package:e_vendas/app/core/model/plano_model.dart';
 import 'package:e_vendas/app/core/model/venda_model.dart';
 import 'package:e_vendas/app/core/stores/global_store.dart';
 import 'package:e_vendas/app/modules/sales/services/sales_service.dart';
+<<<<<<< HEAD
+=======
+import 'package:flutter_modular/flutter_modular.dart';
+>>>>>>> f47e3e3 (atualização 12/08)
 import 'package:mobx/mobx.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,8 +21,13 @@ class SalesStore = _SalesStoreBase with _$SalesStore;
 
 abstract class _SalesStoreBase with Store {
   final String _storageKey = "vendas_abertas";
+<<<<<<< HEAD
   final SalesService _service;
   final GlobalStore _globalStore;
+=======
+  final SalesService _service = SalesService();
+  final GlobalStore _globalStore = Modular.get<GlobalStore>();
+>>>>>>> f47e3e3 (atualização 12/08)
 
   @observable
   ObservableList<VendaModel> vendas = ObservableList<VendaModel>();
@@ -29,6 +38,7 @@ abstract class _SalesStoreBase with Store {
   @observable
   String? errorMessage;
 
+<<<<<<< HEAD
   _SalesStoreBase(this._service, this._globalStore);
 
   /// Busca as vendas abertas do backend e atualiza o estado da store.
@@ -55,6 +65,51 @@ abstract class _SalesStoreBase with Store {
   /// Carrega as vendas salvas localmente no SharedPreferences.
   @action
   // ignore: unused_element
+=======
+  _SalesStoreBase() {
+    // Inicia a store carregando os dados locais (para UI rápida)
+    // e imediatamente busca os dados mais recentes do servidor.
+    _loadVendasFromLocal();
+  }
+
+  /// Busca as propostas abertas do backend e atualiza o estado da store.
+  /// Este método é chamado pela SalesPage ao ser iniciada.
+  @action
+  Future<void> syncOpenProposals() async {
+    
+    errorMessage = null;
+    try {
+      // Pega o ID do vendedor logado a partir do GlobalStore.
+      //final vendedorId = _globalStore.vendedor?['id'];
+      final vendedorId = 22;
+      if (vendedorId == null) {
+        throw Exception("Vendedor não identificado. Faça login novamente.");
+      }
+
+      final propostasJson = await _service.getOpenProposals(vendedorId);
+      
+      // Usa o construtor factory `fromProposalJson` para converter os dados da API
+      // em uma lista de VendaModel.
+      final propostasConvertidas = propostasJson
+          .map((json) => VendaModel.fromJson(json))
+          .toList();
+
+      // Substitui a lista de vendas atual pelos dados frescos do servidor.
+      vendas = ObservableList.of(propostasConvertidas);
+
+      // Salva a nova lista no armazenamento local para acesso offline.
+      await _saveVendas();
+
+    } catch (e) {
+      errorMessage = e.toString().replaceFirst('Exception: ', '');
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  /// Carrega as vendas salvas localmente no SharedPreferences.
+  @action
+>>>>>>> f47e3e3 (atualização 12/08)
   Future<void> _loadVendasFromLocal() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = prefs.getString(_storageKey);

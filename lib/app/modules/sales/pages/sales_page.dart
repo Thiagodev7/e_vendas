@@ -21,7 +21,11 @@ class _SalesPageState extends State<SalesPage> {
   void initState() {
     super.initState();
     // Dispara a busca de dados do servidor sempre que a tela é iniciada.
+<<<<<<< HEAD
     store.fetchVendas();
+=======
+    store.syncOpenProposals();
+>>>>>>> f47e3e3 (atualização 12/08)
   }
 
   @override
