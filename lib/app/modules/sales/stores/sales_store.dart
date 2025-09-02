@@ -1,6 +1,5 @@
-// lib/app/modules/sales/stores/sales_store.dart
-
 import 'dart:convert';
+
 import 'package:e_vendas/app/core/model/contato_model.dart';
 import 'package:e_vendas/app/core/model/endereco_model.dart';
 import 'package:e_vendas/app/core/model/pessoa_model.dart';
@@ -8,10 +7,7 @@ import 'package:e_vendas/app/core/model/plano_model.dart';
 import 'package:e_vendas/app/core/model/venda_model.dart';
 import 'package:e_vendas/app/core/stores/global_store.dart';
 import 'package:e_vendas/app/modules/sales/services/sales_service.dart';
-<<<<<<< HEAD
-=======
 import 'package:flutter_modular/flutter_modular.dart';
->>>>>>> f47e3e3 (atualização 12/08)
 import 'package:mobx/mobx.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,17 +16,21 @@ part 'sales_store.g.dart';
 class SalesStore = _SalesStoreBase with _$SalesStore;
 
 abstract class _SalesStoreBase with Store {
-  final String _storageKey = "vendas_abertas";
-<<<<<<< HEAD
+  _SalesStoreBase({
+    SalesService? service,
+    GlobalStore? global,
+  })  : _service = service ?? Modular.get<SalesService>(),
+        _global = global ?? Modular.get<GlobalStore>();
+
   final SalesService _service;
-  final GlobalStore _globalStore;
-=======
-  final SalesService _service = SalesService();
-  final GlobalStore _globalStore = Modular.get<GlobalStore>();
->>>>>>> f47e3e3 (atualização 12/08)
+  final GlobalStore _global;
+
+  static const _prefsKey = 'sales_drafts';
+  static const _prefsKeyCloudOverrides = 'sales_cloud_overrides_v1';
+  Map<int, VendaModel> _cloudOverrides = {};
 
   @observable
-  ObservableList<VendaModel> vendas = ObservableList<VendaModel>();
+  ObservableList<VendaModel> vendas = ObservableList.of([]);
 
   @observable
   bool isLoading = false;
@@ -38,177 +38,326 @@ abstract class _SalesStoreBase with Store {
   @observable
   String? errorMessage;
 
-<<<<<<< HEAD
-  _SalesStoreBase(this._service, this._globalStore);
+  @observable
+  VendaOrigin? originFilter;
 
-  /// Busca as vendas abertas do backend e atualiza o estado da store.
+  @computed
+  List<VendaModel> get filteredVendas {
+    if (originFilter == null) return vendas.toList();
+    return vendas.where((v) => v.origin == originFilter).toList();
+  }
+
+  @computed
+  int get cloudCount =>
+      vendas.where((v) => v.origin == VendaOrigin.cloud).length;
+
+  @computed
+  int get localCount =>
+      vendas.where((v) => v.origin == VendaOrigin.local).length;
+
+  @computed
+  int get totalCount => vendas.length;
+
   @action
-  Future<void> fetchVendas() async {
-    isLoading = true;
-    errorMessage = null;
-    try {
-      final vendedorId = _globalStore.vendedor?['id'];
-      if (vendedorId == null) {
-        throw Exception("Vendedor não identificado. Faça login novamente.");
-      }
+  void setFilter(VendaOrigin? filter) {
+    originFilter = filter;
+  }
 
-      final lista = await _service.fetchOpenSales(vendedorId);
-      vendas = ObservableList.of(lista);
-      await _saveVendas();
-    } catch (e) {
-      errorMessage = e.toString().replaceFirst('Exception: ', '');
-    } finally {
-      isLoading = false;
+  // -------------------- Persistência Local --------------------
+
+  Future<List<VendaModel>> _loadLocalVendas() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_prefsKey) ?? <String>[];
+    return raw
+        .map((s) => VendaModel.fromLocalJson(jsonDecode(s)))
+        .map((v) => v.copyWith(origin: VendaOrigin.local))
+        .toList();
+  }
+
+  Future<void> _persistLocalsFromCurrentState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final locals = vendas
+        .where((v) => v.origin == VendaOrigin.local)
+        .map((v) =>
+            jsonEncode(v.copyWith(origin: VendaOrigin.local).toLocalJson()))
+        .toList();
+    await prefs.setStringList(_prefsKey, locals);
+  }
+
+  Future<void> _removeLocalVendaInstance(VendaModel target) async {
+    await _persistLocalsFromCurrentState();
+  }
+
+  // -------------------- Overrides Cloud --------------------
+
+  Future<void> _loadCloudOverrides() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_prefsKeyCloudOverrides);
+    if (raw == null || raw.isEmpty) {
+      _cloudOverrides = {};
+      return;
+    }
+    final decoded = jsonDecode(raw) as Map<String, dynamic>;
+    _cloudOverrides = decoded.map((k, v) => MapEntry(
+          int.parse(k),
+          VendaModel.fromLocalJson(v as Map<String, dynamic>)
+              .copyWith(origin: VendaOrigin.cloud),
+        ));
+  }
+
+  Future<void> _saveCloudOverrides() async {
+    final prefs = await SharedPreferences.getInstance();
+    final map = _cloudOverrides.map(
+      (k, v) => MapEntry(k.toString(), v.toLocalJson()),
+    );
+    await prefs.setString(_prefsKeyCloudOverrides, jsonEncode(map));
+  }
+
+  VendaModel _mergeCloudWithOverride(VendaModel cloud, VendaModel override) {
+    // Mantém sempre os flags de status vindos da nuvem (cloud),
+    // e só sobrescreve dados de cadastro/endereço/contatos/ plano.
+    return cloud.copyWith(
+      pessoaTitular: override.pessoaTitular ?? cloud.pessoaTitular,
+      pessoaResponsavelFinanceiro:
+          override.pessoaResponsavelFinanceiro ?? cloud.pessoaResponsavelFinanceiro,
+      dependentes: override.dependentes ?? cloud.dependentes,
+      endereco: override.endereco ?? cloud.endereco,
+      contatos: override.contatos ?? cloud.contatos,
+      plano: override.plano ?? cloud.plano,
+      nroProposta: cloud.nroProposta,
+      origin: VendaOrigin.cloud,
+    );
+  }
+
+  void _upsertCloudOverrideIfNeeded(int index) {
+    if (!_indexIsValid(index)) return;
+    final v = vendas[index];
+    if (v.origin == VendaOrigin.cloud && v.nroProposta != null) {
+      _cloudOverrides[v.nroProposta!] = v;
+      _saveCloudOverrides();
     }
   }
 
-  /// Carrega as vendas salvas localmente no SharedPreferences.
-  @action
-  // ignore: unused_element
-=======
-  _SalesStoreBase() {
-    // Inicia a store carregando os dados locais (para UI rápida)
-    // e imediatamente busca os dados mais recentes do servidor.
-    _loadVendasFromLocal();
-  }
+  // -------------------- Sync --------------------
 
-  /// Busca as propostas abertas do backend e atualiza o estado da store.
-  /// Este método é chamado pela SalesPage ao ser iniciada.
   @action
   Future<void> syncOpenProposals() async {
-    
+    isLoading = true;
     errorMessage = null;
+
     try {
-      // Pega o ID do vendedor logado a partir do GlobalStore.
-      //final vendedorId = _globalStore.vendedor?['id'];
-      final vendedorId = 22;
-      if (vendedorId == null) {
-        throw Exception("Vendedor não identificado. Faça login novamente.");
-      }
+      await _loadCloudOverrides();
+      final local = await _loadLocalVendas();
 
-      final propostasJson = await _service.getOpenProposals(vendedorId);
-      
-      // Usa o construtor factory `fromProposalJson` para converter os dados da API
-      // em uma lista de VendaModel.
-      final propostasConvertidas = propostasJson
-          .map((json) => VendaModel.fromJson(json))
-          .toList();
+      // ajuste se tiver no GlobalStore (ex.: _global.userId)
+      const vendedorId = 22;
+      var cloud = await _service.fetchOpenProposals(vendedorId: vendedorId);
 
-      // Substitui a lista de vendas atual pelos dados frescos do servidor.
-      vendas = ObservableList.of(propostasConvertidas);
+      // aplica overrides locais sobre o que veio da nuvem (apenas campos de cadastro/plano)
+      cloud = cloud.map((c) {
+        final id = c.nroProposta;
+        if (id != null && _cloudOverrides.containsKey(id)) {
+          return _mergeCloudWithOverride(c, _cloudOverrides[id]!);
+        }
+        return c;
+      }).toList();
 
-      // Salva a nova lista no armazenamento local para acesso offline.
-      await _saveVendas();
-
+      vendas = ObservableList.of([...local, ...cloud]);
     } catch (e) {
-      errorMessage = e.toString().replaceFirst('Exception: ', '');
+      errorMessage = e.toString();
+      try {
+        final local = await _loadLocalVendas();
+        vendas = ObservableList.of(local);
+      } catch (_) {}
     } finally {
       isLoading = false;
     }
   }
 
-  /// Carrega as vendas salvas localmente no SharedPreferences.
+  // -------------------- CRUD Local --------------------
+
   @action
->>>>>>> f47e3e3 (atualização 12/08)
-  Future<void> _loadVendasFromLocal() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonString = prefs.getString(_storageKey);
-    if (jsonString != null) {
-      final List decoded = jsonDecode(jsonString);
-      vendas = ObservableList.of(
-        decoded.map((e) => VendaModel.fromJson(e)).toList(),
-      );
-    }
+  Future<void> novaVendaLocal(VendaModel v) async {
+    final nova = v.copyWith(origin: VendaOrigin.local);
+    vendas.insert(0, nova);
+    await _persistLocalsFromCurrentState();
   }
 
-  /// Salva a lista atual de vendas no SharedPreferences.
-  @action
-  Future<void> _saveVendas() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonString = jsonEncode(vendas.map((v) => v.toJson()).toList());
-    await prefs.setString(_storageKey, jsonString);
-  }
-
-  // --- Métodos existentes para manipulação de vendas ---
-
-  /// Cria nova venda
   @action
   Future<int> criarVendaComPlano(PlanModel? plano) async {
     final venda = VendaModel(plano: plano);
     vendas.add(venda);
-    await _saveVendas();
+    await _persistLocalsFromCurrentState();
     return vendas.length - 1;
   }
 
-  /// Atualiza titular
-  @action
-  Future<void> atualizarTitular(int index, PessoaModel titular) async {
-    vendas[index] = vendas[index].copyWith(pessoaTitular: titular);
-    await _saveVendas();
-  }
-
-  /// Atualiza endereço
-  @action
-  Future<void> atualizarEndereco(int index, EnderecoModel endereco) async {
-    vendas[index] = vendas[index].copyWith(endereco: endereco);
-    await _saveVendas();
-  }
-
-  /// Atualiza responsável financeiro
-  @action
-  Future<void> atualizarResponsavelFinanceiro(int index, PessoaModel resp) async {
-    vendas[index] = vendas[index].copyWith(pessoaResponsavelFinanceiro: resp);
-    await _saveVendas();
-  }
-
-  /// Atualiza dependentes
-  @action
-  Future<void> atualizarDependentes(int index, List<PessoaModel> dependentes) async {
-    final vendaAtual = vendas[index];
-    final novo = vendaAtual.copyWith(dependentes: dependentes);
-
-    if (vendaAtual.plano != null) {
-      final vidas = (dependentes.length) + 1;
-      final novoPlano = vendaAtual.plano!.copyWith(vidasSelecionadas: vidas);
-      vendas[index] = novo.copyWith(plano: novoPlano);
-    } else {
-      vendas[index] = novo;
-    }
-    await _saveVendas();
-  }
-
-  /// Atualiza contatos
-  @action
-  Future<void> atualizarContatos(int index, List<ContatoModel> contatos) async {
-    vendas[index] = vendas[index].copyWith(contatos: contatos);
-    await _saveVendas();
-  }
-
-  /// Atualiza plano
-  @action
-  Future<void> atualizarPlano(int index, PlanModel plano) async {
-    final vendaAtual = vendas[index];
-    final vidas = (vendaAtual.dependentes?.length ?? 0) + 1;
-    final planoComVidas = plano.copyWith(vidasSelecionadas: vidas);
-    vendas[index] = vendaAtual.copyWith(plano: planoComVidas);
-    await _saveVendas();
-  }
-
-  /// Remove venda
   @action
   Future<void> removerVenda(int index) async {
-    vendas.removeAt(index);
-    await _saveVendas();
+    if (!_indexIsValid(index)) return;
+    final target = vendas[index];
+
+    isLoading = true;
+    errorMessage = null;
+    try {
+      if (target.origin == VendaOrigin.cloud && target.nroProposta != null) {
+        await _service.excluirProposta(nroProposta: target.nroProposta!);
+        _cloudOverrides.remove(target.nroProposta!);
+        await _saveCloudOverrides();
+      }
+
+      vendas.removeAt(index);
+
+      if (target.origin == VendaOrigin.local) {
+        await _persistLocalsFromCurrentState();
+      }
+    } catch (e) {
+      errorMessage = e.toString();
+      rethrow;
+    } finally {
+      isLoading = false;
+    }
   }
 
-  /// Finaliza venda (apenas remove da lista local)
+  // -------------------- Fluxo Finalização --------------------
+
+  /// Passo 1: criar/garantir a proposta e retornar o nro
   @action
-  Future<void> finalizarVenda(int index) async {
-    vendas.removeAt(index);
-    await _saveVendas();
+  Future<int> finalizarVenda(int index) async {
+    if (!_indexIsValid(index)) throw Exception('Índice inválido');
+    final atual = vendas[index];
+
+    if (atual.plano == null || atual.pessoaTitular == null) {
+      throw Exception('Venda incompleta: plano e titular são obrigatórios.');
+    }
+
+    isLoading = true;
+    errorMessage = null;
+    try {
+      // Se já for cloud, reaproveita
+      if (atual.origin == VendaOrigin.cloud && (atual.nroProposta != null)) {
+        return atual.nroProposta!;
+      }
+
+      // Cria na nuvem
+      // ajuste vendedorId conforme seu contexto (ex.: _global.usuario?.id)
+      const vendedorId = 22;
+      final nro = await _service.criarProposta(atual, vendedorId: vendedorId);
+
+      final atualizado = atual.copyWith(
+        origin: VendaOrigin.cloud,
+        nroProposta: nro,
+      );
+      vendas[index] = atualizado;
+
+      await _persistLocalsFromCurrentState();
+      _upsertCloudOverrideIfNeeded(index);
+
+      return nro;
+    } catch (e) {
+      errorMessage = e.toString();
+      rethrow;
+    } finally {
+      isLoading = false;
+    }
   }
 
-  /// Helpers de validação
-  bool vendaTemPlano(int index) => vendas[index].plano != null;
-  bool vendaTemCliente(int index) => vendas[index].pessoaTitular != null;
+  /// Passo 2: após pagamento e contrato ok, marca venda_finalizada = true e remove da lista
+  @action
+  Future<void> confirmarFinalizacao(int index) async {
+    if (!_indexIsValid(index)) throw Exception('Índice inválido');
+    final v = vendas[index];
+
+    isLoading = true;
+    errorMessage = null;
+    try {
+      // Garante proposta na nuvem
+      if (v.origin == VendaOrigin.local || v.nroProposta == null) {
+        await finalizarVenda(index);
+      }
+      final nro = vendas[index].nroProposta;
+      if (nro == null) {
+        throw Exception('Proposta sem nro_proposta após criação.');
+      }
+
+      await _service.atualizarStatusProposta(
+        nroProposta: nro,
+        vendaFinalizada: true,
+      );
+
+      _cloudOverrides.remove(nro);
+      await _saveCloudOverrides();
+      vendas.removeAt(index);
+
+      await _persistLocalsFromCurrentState();
+    } catch (e) {
+      errorMessage = e.toString();
+      rethrow;
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  // -------------------- Updates --------------------
+
+  bool _indexIsValid(int index) => index >= 0 && index < vendas.length;
+
+  @action
+  Future<void> atualizarPlano(int index, PlanModel plan) async {
+    if (!_indexIsValid(index)) return;
+    final v = vendas[index].copyWith(plano: plan);
+    vendas[index] = v;
+    _upsertCloudOverrideIfNeeded(index);
+    await _persistLocalsFromCurrentState();
+  }
+
+  @action
+  Future<void> atualizarTitular(int index, PessoaModel titular) async {
+    if (!_indexIsValid(index)) return;
+    final v = vendas[index].copyWith(pessoaTitular: titular);
+    vendas[index] = v;
+    _upsertCloudOverrideIfNeeded(index);
+    await _persistLocalsFromCurrentState();
+  }
+
+  @action
+  Future<void> atualizarResponsavelFinanceiro(int index, PessoaModel resp) async {
+    if (!_indexIsValid(index)) return;
+    final v = vendas[index].copyWith(pessoaResponsavelFinanceiro: resp);
+    vendas[index] = v;
+    _upsertCloudOverrideIfNeeded(index);
+    await _persistLocalsFromCurrentState();
+  }
+
+  @action
+  Future<void> atualizarEndereco(int index, EnderecoModel end) async {
+    if (!_indexIsValid(index)) return;
+    final v = vendas[index].copyWith(endereco: end);
+    vendas[index] = v;
+    _upsertCloudOverrideIfNeeded(index);
+    await _persistLocalsFromCurrentState();
+  }
+
+  @action
+  Future<void> atualizarContatos(int index, List<ContatoModel> contatos) async {
+    if (!_indexIsValid(index)) return;
+    final v = vendas[index].copyWith(contatos: contatos);
+    vendas[index] = v;
+    _upsertCloudOverrideIfNeeded(index);
+    await _persistLocalsFromCurrentState();
+  }
+
+  @action
+  Future<void> atualizarDependentes(int index, List<PessoaModel> deps) async {
+    if (!_indexIsValid(index)) return;
+    final v = vendas[index].copyWith(dependentes: deps);
+    vendas[index] = v;
+    _upsertCloudOverrideIfNeeded(index);
+    await _persistLocalsFromCurrentState();
+  }
+
+  bool vendaTemPlano(int index) =>
+      _indexIsValid(index) && vendas[index].plano != null;
+
+  bool vendaTemCliente(int index) =>
+      _indexIsValid(index) && vendas[index].pessoaTitular != null;
 }

@@ -10,9 +10,7 @@ class SalesModule extends Module {
   @override
   void binds(i) {
     i.addLazySingleton(SalesService.new);
-    i.addLazySingleton<SalesStore>(
-      () => SalesStore(i.get<SalesService>(), i.get<GlobalStore>()),
-    );
+    i.addLazySingleton(SalesStore.new);
   }
 
   @override

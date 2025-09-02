@@ -1,9 +1,10 @@
 // lib/app/core/model/venda_model.dart
-
 import 'package:e_vendas/app/core/model/contato_model.dart';
 import 'package:e_vendas/app/core/model/endereco_model.dart';
 import 'package:e_vendas/app/core/model/pessoa_model.dart';
 import 'package:e_vendas/app/core/model/plano_model.dart';
+
+enum VendaOrigin { local, cloud }
 
 class VendaModel {
   final PessoaModel? pessoaTitular;
@@ -13,6 +14,17 @@ class VendaModel {
   final List<ContatoModel>? contatos;
   final PlanModel? plano;
 
+  /// Identificador da proposta na nuvem (quando origin == cloud)
+  final int? nroProposta;
+
+  /// Sinalizadores da proposta (vêm do backend)
+  final bool pagamentoConcluido;
+  final bool contratoAssinado;
+  final bool vendaFinalizada;
+
+  /// Origem (local x nuvem)
+  final VendaOrigin origin;
+
   VendaModel({
     this.pessoaTitular,
     this.pessoaResponsavelFinanceiro,
@@ -20,9 +32,16 @@ class VendaModel {
     this.endereco,
     this.contatos,
     this.plano,
+    this.nroProposta,
+    this.origin = VendaOrigin.local,
+    this.pagamentoConcluido = false,
+    this.contratoAssinado = false,
+    this.vendaFinalizada = false,
   });
 
-  /// Cria uma cópia do modelo com valores atualizados.
+  /// Vidas = dependentes + 1 (titular)
+  int get vidasSelecionadas => (dependentes?.length ?? 0) + 1;
+
   VendaModel copyWith({
     PessoaModel? pessoaTitular,
     PessoaModel? pessoaResponsavelFinanceiro,
@@ -30,6 +49,11 @@ class VendaModel {
     EnderecoModel? endereco,
     List<ContatoModel>? contatos,
     PlanModel? plano,
+    int? nroProposta,
+    VendaOrigin? origin,
+    bool? pagamentoConcluido,
+    bool? contratoAssinado,
+    bool? vendaFinalizada,
   }) {
     return VendaModel(
       pessoaTitular: pessoaTitular ?? this.pessoaTitular,
@@ -39,77 +63,124 @@ class VendaModel {
       endereco: endereco ?? this.endereco,
       contatos: contatos ?? this.contatos,
       plano: plano ?? this.plano,
+      nroProposta: nroProposta ?? this.nroProposta,
+      origin: origin ?? this.origin,
+      pagamentoConcluido: pagamentoConcluido ?? this.pagamentoConcluido,
+      contratoAssinado: contratoAssinado ?? this.contratoAssinado,
+      vendaFinalizada: vendaFinalizada ?? this.vendaFinalizada,
     );
   }
 
-  /// Converte o modelo para um JSON, usado para salvar localmente.
-  Map<String, dynamic> toJson() {
+  // --------- Persistência local ---------
+
+  Map<String, dynamic> toLocalJson() {
     return {
-      "pessoa_titular": pessoaTitular?.toJson(),
-      "pessoa_responsavel_financeiro": pessoaResponsavelFinanceiro?.toJson(),
-      "dependentes": dependentes?.map((e) => e.toJson()).toList(),
-      "endereco": endereco?.toJson(),
-      "contatos": contatos?.map((e) => e.toJson()).toList(),
-      "plano": plano?.toJson(),
+      'pessoaTitular': pessoaTitular?.toJson(),
+      'pessoaResponsavelFinanceiro': pessoaResponsavelFinanceiro?.toJson(),
+      'dependentes': dependentes?.map((e) => e.toJson()).toList(),
+      'endereco': endereco?.toJson(),
+      'contatos': contatos?.map((e) => e.toJson()).toList(),
+      'plano': plano?.toJson(),
+      'nroProposta': nroProposta,
+      'origin': origin.name,
+      'pagamentoConcluido': pagamentoConcluido,
+      'contratoAssinado': contratoAssinado,
+      'vendaFinalizada': vendaFinalizada,
     };
   }
 
-  /// Cria um VendaModel a partir de um JSON (usado para carregar do SharedPreferences).
-  factory VendaModel.fromJson(Map<String, dynamic> json) {
+  factory VendaModel.fromLocalJson(Map<String, dynamic> json) {
+    final nro = json['nroProposta'];
+    final int? nroProp = nro is int ? nro : int.tryParse(nro?.toString() ?? '');
+
     return VendaModel(
-      pessoaTitular: json['pessoa_titular'] != null
-          ? PessoaModel.fromJson(json['pessoa_titular'])
+      pessoaTitular: json['pessoaTitular'] != null
+          ? PessoaModel.fromJson(json['pessoaTitular'])
           : null,
-      pessoaResponsavelFinanceiro: json['pessoa_responsavel_financeiro'] != null
-          ? PessoaModel.fromJson(json['pessoa_responsavel_financeiro'])
+      pessoaResponsavelFinanceiro: json['pessoaResponsavelFinanceiro'] != null
+          ? PessoaModel.fromJson(json['pessoaResponsavelFinanceiro'])
           : null,
-      dependentes: json['dependentes'] != null
-          ? (json['dependentes'] as List)
-              .map((e) => PessoaModel.fromJson(e))
-              .toList()
-          : [],
+      dependentes: (json['dependentes'] as List?)
+          ?.map((e) => PessoaModel.fromJson(e))
+          .toList(),
       endereco: json['endereco'] != null
           ? EnderecoModel.fromJson(json['endereco'])
           : null,
-      contatos: json['contatos'] != null
-          ? (json['contatos'] as List)
-              .map((e) => ContatoModel.fromJson(e))
-              .toList()
-          : [],
-      plano:
-          json['plano'] != null ? PlanModel.fromJson(json['plano']) : null,
+      contatos: (json['contatos'] as List?)
+          ?.map((e) => ContatoModel.fromJson(e))
+          .toList(),
+      plano: json['plano'] != null ? PlanModel.fromJson(json['plano']) : null,
+      nroProposta: nroProp,
+      origin: switch (json['origin']) {
+        'cloud' => VendaOrigin.cloud,
+        _ => VendaOrigin.local,
+      },
+      pagamentoConcluido: _asBool(json['pagamentoConcluido']),
+      contratoAssinado: _asBool(json['contratoAssinado']),
+      vendaFinalizada: _asBool(json['vendaFinalizada']),
     );
   }
 
-  /// **ATUALIZADO:** Cria um VendaModel a partir do JSON retornado pelo endpoint de propostas abertas.
+  /// Constrói a venda vinda do backend (propostas abertas)
   factory VendaModel.fromProposalJson(Map<String, dynamic> json) {
-    // Converte a lista de dependentes
     final dependentesList = (json['dependentes'] as List<dynamic>?)
         ?.map((depJson) => PessoaModel.fromJson(depJson as Map<String, dynamic>))
         .toList();
 
-    // Converte a lista de contatos
     final contatosList = (json['contatos'] as List<dynamic>?)
         ?.map((cJson) => ContatoModel.fromJson(cJson as Map<String, dynamic>))
         .toList();
 
-    return VendaModel(
-      plano: json['plano'] != null 
-          ? PlanModel.fromMap(json['plano'] as Map<String, dynamic>) 
+    final planBase = (json['plano'] != null)
+        ? PlanModel.fromMap(json['plano'] as Map<String, dynamic>)
+        : null;
+
+    // pode vir string/number
+    final rawNro = json['nro_proposta'] ?? json['nroProposta'];
+    final int? nroProp = rawNro is int ? rawNro : int.tryParse(rawNro?.toString() ?? '');
+
+    final parcial = VendaModel(
+      pessoaTitular: json['pessoatitular'] != null
+          ? PessoaModel.fromJson(json['pessoatitular'] as Map<String, dynamic>)
           : null,
-      pessoaTitular: json['pessoatitular'] != null 
-          ? PessoaModel.fromJson(json['pessoatitular'] as Map<String, dynamic>) 
-          : null,
-      pessoaResponsavelFinanceiro: json['pessoaresponsavelfinanceiro'] != null 
-          ? PessoaModel.fromJson(json['pessoaresponsavelfinanceiro'] as Map<String, dynamic>) 
+      pessoaResponsavelFinanceiro: json['pessoaResponsavelFinanceiro'] != null
+          ? PessoaModel.fromJson(
+              json['pessoaResponsavelFinanceiro'] as Map<String, dynamic>)
           : null,
       dependentes: dependentesList,
-
-      // ATUALIZADO: Processa os novos campos
       endereco: json['endereco'] != null
           ? EnderecoModel.fromJson(json['endereco'] as Map<String, dynamic>)
           : null,
       contatos: contatosList,
+      nroProposta: nroProp,
+      origin: VendaOrigin.cloud,
+
+      // aceita snake_case e camelCase
+      pagamentoConcluido: _asBool(
+        json['pagamento_concluido'] ?? json['pagamentoConcluido'],
+      ),
+      contratoAssinado: _asBool(
+        json['contrato_assinado'] ?? json['contratoAssinado'],
+      ),
+      vendaFinalizada: _asBool(
+        json['venda_finalizada'] ?? json['vendaFinalizada'],
+      ),
     );
+
+    final vidas = parcial.vidasSelecionadas;
+    final planSynced =
+        planBase != null ? planBase.copyWith(vidasSelecionadas: vidas) : null;
+
+    return parcial.copyWith(plano: planSynced);
+  }
+
+  // --------- Helpers ---------
+
+  static bool _asBool(dynamic v) {
+    if (v == null) return false;
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v.toString().trim().toLowerCase();
+    return s == 'true' || s == '1' || s == 'yes' || s == 'y' || s == 'sim';
   }
 }

@@ -456,15 +456,29 @@ void initState() {
   }
 
   Future<void> _salvarDadosVenda(int index) async {
-    await salesStore.atualizarTitular(index, store.titular!);
-    await salesStore.atualizarEndereco(index, store.endereco!);
-    await salesStore.atualizarDependentes(index, store.dependentes.toList());
-    await salesStore.atualizarContatos(index, store.contatos.toList());
-    if (store.responsavelFinanceiro != null) {
-      await salesStore.atualizarResponsavelFinanceiro(
-          index, store.responsavelFinanceiro!);
-    }
+  // Atualiza os campos alterados manualmente
+  store.titular = store.titular!.copyWith(
+    idEstadoCivil: estadoCivilTitular?.id,
+  );
+
+  store.endereco = store.endereco!.copyWith(
+    numero: numeroController.text.isNotEmpty
+        ? int.tryParse(numeroController.text)
+        : null,
+    complemento: complementoController.text,
+  );
+
+  // Salva
+  await salesStore.atualizarTitular(index, store.titular!);
+  await salesStore.atualizarEndereco(index, store.endereco!);
+  await salesStore.atualizarDependentes(index, store.dependentes.toList());
+  await salesStore.atualizarContatos(index, store.contatos.toList());
+
+  if (store.responsavelFinanceiro != null) {
+    await salesStore.atualizarResponsavelFinanceiro(
+        index, store.responsavelFinanceiro!);
   }
+}
 
   // Campos e cards
   Widget _buildCpfField() {
