@@ -1,6 +1,9 @@
-// lib/app/core/model/plan_model.dart
+// lib/app/core/model/plano_model.dart
 import 'dart:convert';
 import 'package:e_vendas/app/core/model/values_of_ccontract_model.dart';
+
+/// Ciclo de cobrança do plano
+enum BillingCycle { mensal, anual }
 
 class PlanModel {
   final int id;
@@ -12,6 +15,12 @@ class PlanModel {
   /// Quantidade de vidas selecionadas
   final int vidasSelecionadas;
 
+  /// NOVO: ciclo de cobrança (mensal/anual)
+  final BillingCycle billingCycle;
+
+  /// NOVO: dia de vencimento (apenas quando mensal). 1..28 recomendado
+  final int? dueDay;
+
   PlanModel({
     required this.id,
     required this.codigoPlano,
@@ -19,6 +28,8 @@ class PlanModel {
     required this.nomeContrato,
     required this.values,
     this.vidasSelecionadas = 1,
+    this.billingCycle = BillingCycle.mensal,
+    this.dueDay,
   });
 
   PlanModel copyWith({
@@ -28,6 +39,8 @@ class PlanModel {
     String? nomeContrato,
     List<ValuesOfContractModel>? values,
     int? vidasSelecionadas,
+    BillingCycle? billingCycle,
+    int? dueDay,
   }) {
     return PlanModel(
       id: id ?? this.id,
@@ -36,6 +49,8 @@ class PlanModel {
       nomeContrato: nomeContrato ?? this.nomeContrato,
       values: values ?? this.values,
       vidasSelecionadas: vidasSelecionadas ?? this.vidasSelecionadas,
+      billingCycle: billingCycle ?? this.billingCycle,
+      dueDay: dueDay ?? this.dueDay,
     );
   }
 
@@ -47,6 +62,8 @@ class PlanModel {
       'nome_contrato': nomeContrato,
       'values': values.map((x) => x.toMap()).toList(),
       'vidas_selecionadas': vidasSelecionadas,
+      'billing_cycle': billingCycle.name, // 'mensal' | 'anual'
+      'due_day': dueDay,
     };
   }
 
@@ -62,7 +79,14 @@ class PlanModel {
         ),
       ),
       vidasSelecionadas: map['vidas_selecionadas'] ?? 1,
+      billingCycle: _parseCycle(map['billing_cycle']),
+      dueDay: map['due_day'],
     );
+  }
+
+  static BillingCycle _parseCycle(dynamic raw) {
+    final s = (raw ?? 'mensal').toString().toLowerCase();
+    return s == 'anual' ? BillingCycle.anual : BillingCycle.mensal;
   }
 
   String toJson() => json.encode(toMap());
@@ -70,7 +94,7 @@ class PlanModel {
   factory PlanModel.fromJson(String source) =>
       PlanModel.fromMap(json.decode(source));
 
-  /// Valor da mensalidade de acordo com vidasSelecionadas
+  /// Valor unitário da mensalidade p/ a qtde de vidas selecionadas
   String getMensalidade() {
     final mensal = values.firstWhere(
       (v) => v.descricao == 'Mensalidade' && v.qtdeVida == vidasSelecionadas,
@@ -85,7 +109,7 @@ class PlanModel {
     return mensal.valor;
   }
 
-  /// Valor da taxa de adesão de acordo com vidasSelecionadas
+  /// Valor unitário da taxa de adesão p/ a qtde de vidas selecionadas
   String getTaxaAdesao() {
     final adesao = values.firstWhere(
       (v) => v.descricao == 'Taxa de Adesão' && v.qtdeVida == vidasSelecionadas,
@@ -100,7 +124,7 @@ class PlanModel {
     return adesao.valor;
   }
 
-  /// Valor da mensalidade de acordo com vidasSelecionadas
+  /// Total mensal (somando todas as vidas)
   String getMensalidadeTotal() {
     final mensal = values.firstWhere(
       (v) => v.descricao == 'Mensalidade' && v.qtdeVida == vidasSelecionadas,
@@ -115,7 +139,7 @@ class PlanModel {
     return mensal.valorTotal;
   }
 
-  /// Valor da taxa de adesão de acordo com vidasSelecionadas
+  /// Total da taxa de adesão (somando todas as vidas)
   String getTaxaAdesaoTotal() {
     final adesao = values.firstWhere(
       (v) => v.descricao == 'Taxa de Adesão' && v.qtdeVida == vidasSelecionadas,
@@ -130,8 +154,15 @@ class PlanModel {
     return adesao.valorTotal;
   }
 
+  String getAnualTotal() {
+  final mensal = double.tryParse(getMensalidadeTotal().replaceAll(',', '.')) ?? 0.0;
+  final anualComDesconto = mensal * 12 * 0.90;
+  return anualComDesconto.toStringAsFixed(2);
+}
+
   @override
   String toString() {
-    return 'PlanModel(id: $id, codigoPlano: $codigoPlano, vidasSelecionadas: $vidasSelecionadas, nomeContrato: $nomeContrato)';
+    return 'PlanModel(id: $id, codigoPlano: $codigoPlano, vidasSelecionadas: $vidasSelecionadas, '
+           'nomeContrato: $nomeContrato, billingCycle: ${billingCycle.name}, dueDay: $dueDay)';
   }
 }

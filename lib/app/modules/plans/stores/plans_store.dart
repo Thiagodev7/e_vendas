@@ -15,11 +15,19 @@ abstract class _PlansStoreBase with Store {
   @observable
   ObservableList<PlanModel> plans = ObservableList<PlanModel>();
 
-  /// Mapa para armazenar quantidade de vidas selecionadas (por id do plano)
+  /// Vidas selecionadas por plano
   @observable
   ObservableMap<int, int> selectedLives = ObservableMap<int, int>();
 
-  /// Carrega planos e inicializa mapa de vidas
+  /// NOVO: ciclo de cobrança por plano
+  @observable
+  ObservableMap<int, BillingCycle> selectedCycle = ObservableMap<int, BillingCycle>();
+
+  /// NOVO: dia de vencimento por plano (apenas para mensal)
+  @observable
+  ObservableMap<int, int> selectedDueDay = ObservableMap<int, int>();
+
+  /// Carrega planos e inicializa seleção
   @action
   Future<void> loadPlans() async {
     try {
@@ -28,9 +36,10 @@ abstract class _PlansStoreBase with Store {
 
       plans = ObservableList.of(result);
 
-      // Inicializa cada plano com 1 vida
       for (var plan in result) {
         selectedLives[plan.id] = 1;
+        selectedCycle[plan.id] = BillingCycle.mensal;
+        selectedDueDay[plan.id] = 10; // default: dia 10
       }
     } catch (e) {
       plans = ObservableList<PlanModel>();
@@ -39,14 +48,34 @@ abstract class _PlansStoreBase with Store {
     }
   }
 
-  /// Atualiza quantidade de vidas para um plano
+  // ----- Setters / Getters -----
+
   @action
   void setLives(int planId, int lives) {
     selectedLives[planId] = lives;
   }
 
-  /// Retorna quantidade de vidas selecionadas para um plano
   int getLives(int planId) {
     return selectedLives[planId] ?? 1;
+  }
+
+  @action
+  void setCycle(int planId, BillingCycle cycle) {
+    selectedCycle[planId] = cycle;
+  }
+
+  BillingCycle getCycle(int planId) {
+    return selectedCycle[planId] ?? BillingCycle.mensal;
+  }
+
+  @action
+  void setDueDay(int planId, int day) {
+    // segurando 1..28 para evitar meses com menos dias
+    final safe = day.clamp(1, 28);
+    selectedDueDay[planId] = safe;
+  }
+
+  int getDueDay(int planId) {
+    return selectedDueDay[planId] ?? 10;
   }
 }

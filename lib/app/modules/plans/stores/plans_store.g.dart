@@ -57,6 +57,38 @@ mixin _$PlansStore on _PlansStoreBase, Store {
     });
   }
 
+  late final _$selectedCycleAtom =
+      Atom(name: '_PlansStoreBase.selectedCycle', context: context);
+
+  @override
+  ObservableMap<int, BillingCycle> get selectedCycle {
+    _$selectedCycleAtom.reportRead();
+    return super.selectedCycle;
+  }
+
+  @override
+  set selectedCycle(ObservableMap<int, BillingCycle> value) {
+    _$selectedCycleAtom.reportWrite(value, super.selectedCycle, () {
+      super.selectedCycle = value;
+    });
+  }
+
+  late final _$selectedDueDayAtom =
+      Atom(name: '_PlansStoreBase.selectedDueDay', context: context);
+
+  @override
+  ObservableMap<int, int> get selectedDueDay {
+    _$selectedDueDayAtom.reportRead();
+    return super.selectedDueDay;
+  }
+
+  @override
+  set selectedDueDay(ObservableMap<int, int> value) {
+    _$selectedDueDayAtom.reportWrite(value, super.selectedDueDay, () {
+      super.selectedDueDay = value;
+    });
+  }
+
   late final _$loadPlansAsyncAction =
       AsyncAction('_PlansStoreBase.loadPlans', context: context);
 
@@ -80,11 +112,35 @@ mixin _$PlansStore on _PlansStoreBase, Store {
   }
 
   @override
+  void setCycle(int planId, BillingCycle cycle) {
+    final _$actionInfo = _$_PlansStoreBaseActionController.startAction(
+        name: '_PlansStoreBase.setCycle');
+    try {
+      return super.setCycle(planId, cycle);
+    } finally {
+      _$_PlansStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
+  void setDueDay(int planId, int day) {
+    final _$actionInfo = _$_PlansStoreBaseActionController.startAction(
+        name: '_PlansStoreBase.setDueDay');
+    try {
+      return super.setDueDay(planId, day);
+    } finally {
+      _$_PlansStoreBaseActionController.endAction(_$actionInfo);
+    }
+  }
+
+  @override
   String toString() {
     return '''
 isLoading: ${isLoading},
 plans: ${plans},
-selectedLives: ${selectedLives}
+selectedLives: ${selectedLives},
+selectedCycle: ${selectedCycle},
+selectedDueDay: ${selectedDueDay}
     ''';
   }
 }

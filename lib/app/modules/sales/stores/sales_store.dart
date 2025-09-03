@@ -115,7 +115,7 @@ abstract class _SalesStoreBase with Store {
 
   VendaModel _mergeCloudWithOverride(VendaModel cloud, VendaModel override) {
     // Mantém sempre os flags de status vindos da nuvem (cloud),
-    // e só sobrescreve dados de cadastro/endereço/contatos/ plano.
+    // e só sobrescreve dados de cadastro/endereço/contatos/plano.
     return cloud.copyWith(
       pessoaTitular: override.pessoaTitular ?? cloud.pessoaTitular,
       pessoaResponsavelFinanceiro:
@@ -136,6 +136,26 @@ abstract class _SalesStoreBase with Store {
       _cloudOverrides[v.nroProposta!] = v;
       _saveCloudOverrides();
     }
+  }
+
+  // -------------------- Helpers de hidratação --------------------
+
+  /// Ajusta o plano da venda para refletir:
+  /// - vidasSelecionadas = dependentes + 1
+  /// - dueDay padrão quando mensal
+  PlanModel? _hydratePlanInfo(VendaModel v) {
+    final p = v.plano;
+    if (p == null) return null;
+
+    final vidas = (v.dependentes?.length ?? 0) + 1;
+    final cycle = p.billingCycle; // mantém o ciclo já escolhido
+    final due = cycle == BillingCycle.mensal ? (p.dueDay ?? 10) : null;
+
+    return p.copyWith(
+      vidasSelecionadas: vidas,
+      billingCycle: cycle,
+      dueDay: due,
+    );
   }
 
   // -------------------- Sync --------------------
@@ -162,12 +182,24 @@ abstract class _SalesStoreBase with Store {
         return c;
       }).toList();
 
-      vendas = ObservableList.of([...local, ...cloud]);
+      // Junta e hidrata planos
+      var combined = [...local, ...cloud];
+      combined = combined.map((v) {
+        final hydrated = _hydratePlanInfo(v);
+        return hydrated != null ? v.copyWith(plano: hydrated) : v;
+      }).toList();
+
+      vendas = ObservableList.of(combined);
     } catch (e) {
       errorMessage = e.toString();
       try {
         final local = await _loadLocalVendas();
-        vendas = ObservableList.of(local);
+        // Hidrata locais também
+        final hydrated = local.map((v) {
+          final hp = _hydratePlanInfo(v);
+          return hp != null ? v.copyWith(plano: hp) : v;
+        }).toList();
+        vendas = ObservableList.of(hydrated);
       } catch (_) {}
     } finally {
       isLoading = false;
@@ -178,14 +210,23 @@ abstract class _SalesStoreBase with Store {
 
   @action
   Future<void> novaVendaLocal(VendaModel v) async {
-    final nova = v.copyWith(origin: VendaOrigin.local);
+    // hidrata o plano (vidas e dueDay) antes de inserir
+    final hp = _hydratePlanInfo(v);
+    final nova = (hp != null ? v.copyWith(plano: hp) : v).copyWith(
+      origin: VendaOrigin.local,
+    );
     vendas.insert(0, nova);
     await _persistLocalsFromCurrentState();
   }
 
   @action
   Future<int> criarVendaComPlano(PlanModel? plano) async {
-    final venda = VendaModel(plano: plano);
+    var venda = VendaModel(plano: plano);
+    // hidrata conforme dependentes (provavelmente 0 → vidas=1) e dueDay mensal
+    final hp = _hydratePlanInfo(venda);
+    if (hp != null) {
+      venda = venda.copyWith(plano: hp);
+    }
     vendas.add(venda);
     await _persistLocalsFromCurrentState();
     return vendas.length - 1;
@@ -233,13 +274,12 @@ abstract class _SalesStoreBase with Store {
     isLoading = true;
     errorMessage = null;
     try {
-      // Se já for cloud, reaproveita
+      // Se já for cloud e já tiver nro → reaproveita
       if (atual.origin == VendaOrigin.cloud && (atual.nroProposta != null)) {
         return atual.nroProposta!;
       }
 
       // Cria na nuvem
-      // ajuste vendedorId conforme seu contexto (ex.: _global.usuario?.id)
       const vendedorId = 22;
       final nro = await _service.criarProposta(atual, vendedorId: vendedorId);
 
@@ -304,8 +344,16 @@ abstract class _SalesStoreBase with Store {
   @action
   Future<void> atualizarPlano(int index, PlanModel plan) async {
     if (!_indexIsValid(index)) return;
-    final v = vendas[index].copyWith(plano: plan);
-    vendas[index] = v;
+    // garante dueDay quando mensal + vidas coerentes com dependentes atuais
+    final atual = vendas[index];
+    var fixed = plan;
+    if (fixed.billingCycle == BillingCycle.mensal && fixed.dueDay == null) {
+      fixed = fixed.copyWith(dueDay: 10);
+    }
+    final v = atual.copyWith(plano: fixed);
+    final hp = _hydratePlanInfo(v);
+    vendas[index] = hp != null ? v.copyWith(plano: hp) : v;
+
     _upsertCloudOverrideIfNeeded(index);
     await _persistLocalsFromCurrentState();
   }
@@ -349,7 +397,15 @@ abstract class _SalesStoreBase with Store {
   @action
   Future<void> atualizarDependentes(int index, List<PessoaModel> deps) async {
     if (!_indexIsValid(index)) return;
-    final v = vendas[index].copyWith(dependentes: deps);
+
+    var v = vendas[index].copyWith(dependentes: deps);
+
+    // re-hidrata com nova qtd. de vidas
+    final hp = _hydratePlanInfo(v);
+    if (hp != null) {
+      v = v.copyWith(plano: hp);
+    }
+
     vendas[index] = v;
     _upsertCloudOverrideIfNeeded(index);
     await _persistLocalsFromCurrentState();

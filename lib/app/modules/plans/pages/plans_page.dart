@@ -37,8 +37,7 @@ class _PlansPageState extends State<PlansPage> {
       child: Observer(
         builder: (_) {
           if (store.isLoading) {
-            return const Center(
-                child: CircularProgressIndicator(color: Colors.white));
+            return const Center(child: CircularProgressIndicator());
           }
 
           final plans = store.plans;
@@ -51,8 +50,7 @@ class _PlansPageState extends State<PlansPage> {
 
               return ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                 itemCount: plans.length,
                 itemBuilder: (context, index) {
                   return Observer(
@@ -61,8 +59,7 @@ class _PlansPageState extends State<PlansPage> {
                       return Container(
                         width: cardWidth,
                         height: cardHeight,
-                        margin: EdgeInsets.only(
-                            right: index == plans.length - 1 ? 0 : 20),
+                        margin: EdgeInsets.only(right: index == plans.length - 1 ? 0 : 20),
                         child: _buildHorizontalCard(plan, vendaIndex),
                       );
                     },
@@ -78,17 +75,20 @@ class _PlansPageState extends State<PlansPage> {
 
   /// Card do Plano
   Widget _buildHorizontalCard(PlanModel plan, int? vendaIndex) {
-    // Pega quantidade de vidas selecionadas
     final vidas = store.getLives(plan.id);
+    final cycle = store.getCycle(plan.id);
+    final isMensal = cycle == BillingCycle.mensal;
 
-    // Calcula valores multiplicando pelas vidas
-    final mensal =
-        (double.parse(plan.getMensalidade()) * vidas).toStringAsFixed(2);
-    final adesao =
-        (double.parse(plan.getTaxaAdesao()) * vidas).toStringAsFixed(2);
+    // Cálculos
+    final mensalDouble = (double.tryParse(plan.getMensalidade().replaceAll(',', '.')) ?? 0.0) * vidas;
+    final adesaoDouble = (double.tryParse(plan.getTaxaAdesao().replaceAll(',', '.')) ?? 0.0) * vidas;
+
+    final mensal = mensalDouble.toStringAsFixed(2);
+    // Anual com 10% de desconto
+    final anual = (mensalDouble * 12 * 0.90).toStringAsFixed(2);
+    final adesao = adesaoDouble.toStringAsFixed(2);
 
     final cobertura = PlanoInfo.getInfo(plan.nomeContrato);
-
     final beneficios = cobertura
         .split('\n')
         .where((line) => line.startsWith('☑️'))
@@ -122,15 +122,12 @@ class _PlansPageState extends State<PlansPage> {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Text(
               plan.nomeContrato,
               style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+                fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white,
               ),
             ),
           ),
@@ -149,11 +146,9 @@ class _PlansPageState extends State<PlansPage> {
                       onTap: () => store.setLives(plan.id, v),
                       child: Container(
                         margin: const EdgeInsets.symmetric(horizontal: 4),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color:
-                              isSelected ? AppColors.primary : Colors.grey[300],
+                          color: isSelected ? AppColors.primary : Colors.grey[300],
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -171,13 +166,60 @@ class _PlansPageState extends State<PlansPage> {
             ),
           ),
 
-          // Valores
+          // Seletor ciclo de cobrança (Mensal x Anual)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Cobrança:', style: TextStyle(fontSize: 14)),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    _choice(
+                      label: 'Mensal',
+                      selected: isMensal,
+                      onTap: () => store.setCycle(plan.id, BillingCycle.mensal),
+                    ),
+                    _choice(
+                      label: 'Anual (-10%)',
+                      selected: !isMensal,
+                      onTap: () => store.setCycle(plan.id, BillingCycle.anual),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Dia de vencimento (apenas quando Mensal) — APENAS Dropdown
+          if (isMensal)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Row(
+                children: [
+                  const Text('Dia de vencimento:'),
+                  const SizedBox(width: 8),
+                  DropdownButton<int>(
+                    value: store.getDueDay(plan.id),
+                    items: List.generate(28, (i) => i + 1)
+                        .map((d) => DropdownMenuItem(value: d, child: Text('Dia $d')))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) store.setDueDay(plan.id, v);
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+          // Valores (rótulo muda conforme ciclo)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildValueBox('Mensalidade', mensal),
+                _buildValueBox(isMensal ? 'Mensalidade' : 'Anual (-10%)', isMensal ? mensal : anual),
                 _buildValueBox('Adesão', adesao),
               ],
             ),
@@ -187,10 +229,7 @@ class _PlansPageState extends State<PlansPage> {
           const Divider(),
           const Padding(
             padding: EdgeInsets.all(8.0),
-            child: Text(
-              'Cobertura:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            child: Text('Cobertura:', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
 
           // Lista de benefícios
@@ -201,15 +240,9 @@ class _PlansPageState extends State<PlansPage> {
               itemBuilder: (context, index) {
                 return Row(
                   children: [
-                    const Icon(Icons.check_circle,
-                        color: Colors.green, size: 16),
+                    const Icon(Icons.check_circle, color: Colors.green, size: 16),
                     const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        beneficios[index],
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    ),
+                    Expanded(child: Text(beneficios[index], style: const TextStyle(fontSize: 13))),
                   ],
                 );
               },
@@ -225,23 +258,31 @@ class _PlansPageState extends State<PlansPage> {
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   backgroundColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () async {
+                  // vidas conforme venda (se edição) ou 1 (se nova)
                   int vidas = 1;
                   if (vendaIndex != null) {
                     final venda = salesStore.vendas[vendaIndex];
                     vidas = (venda.dependentes?.length ?? 0) + 1;
+                  }
 
-                    // Atualiza plano com vidas
-                    final planoComVidas =
-                        plan.copyWith(vidasSelecionadas: vidas);
-                    await salesStore.atualizarPlano(vendaIndex, planoComVidas);
+                  final selectedCycle = store.getCycle(plan.id);
+                  final selectedDue = selectedCycle == BillingCycle.mensal
+                      ? store.getDueDay(plan.id)
+                      : null;
+
+                  final planoSelecionado = plan.copyWith(
+                    vidasSelecionadas: vidas,
+                    billingCycle: selectedCycle,
+                    dueDay: selectedDue,
+                  );
+
+                  if (vendaIndex != null) {
+                    await salesStore.atualizarPlano(vendaIndex, planoSelecionado);
                   } else {
-                    final planoComVidas = plan.copyWith(vidasSelecionadas: 1);
-                    await salesStore.criarVendaComPlano(planoComVidas);
+                    await salesStore.criarVendaComPlano(planoSelecionado);
                   }
 
                   Modular.to.navigate('/sales');
@@ -258,6 +299,26 @@ class _PlansPageState extends State<PlansPage> {
     );
   }
 
+  Widget _choice({required String label, required bool selected, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : Colors.grey[300],
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildValueBox(String label, String valor) {
     return Container(
       padding: const EdgeInsets.all(8),
@@ -268,12 +329,8 @@ class _PlansPageState extends State<PlansPage> {
       ),
       child: Column(
         children: [
-          Text(label,
-              style: const TextStyle(fontSize: 12, color: Colors.black54)),
-          Text(
-            'R\$ $valor',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
+          Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          Text('R\$ $valor', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ],
       ),
     );
