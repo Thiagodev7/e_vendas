@@ -1,10 +1,12 @@
+import 'package:e_vendas/app/core/model/plano_model.dart';
+import 'package:e_vendas/app/modules/finish_sale/widgets/billing_calculator.dart';
 import 'package:mobx/mobx.dart';
 import 'package:flutter_modular/flutter_modular.dart';
+
 import 'package:e_vendas/app/core/model/contato_model.dart';
 import 'package:e_vendas/app/core/model/venda_model.dart';
 import 'package:e_vendas/app/modules/finish_sale/service/payment_service.dart';
 import 'package:e_vendas/app/modules/sales/services/sales_service.dart';
-
 import 'finish_types.dart';
 
 part 'finish_payment_store.g.dart';
@@ -21,26 +23,20 @@ abstract class _FinishPaymentStoreBase with Store {
   final PaymentService _payment;
   final SalesService _sales;
 
-  // bindings
+  // ===== Bindings / estado base =====
   @observable
   VendaModel? venda;
 
   @observable
   int? nroProposta;
 
-  /// Num. de meses para compor payload anual
-  @observable
-  int numMonths = 12;
-
-  // estado base
   @observable
   bool loading = false;
 
-  // método UI
   @observable
   PayMethod metodo = PayMethod.card;
 
-  // cobrança
+  // ===== Cobrança (IDs/links) =====
   @observable
   String? cardUrl;
 
@@ -65,43 +61,64 @@ abstract class _FinishPaymentStoreBase with Store {
   @observable
   PaymentStatus paymentStatus = PaymentStatus.none;
 
-  /// backend já marcou pagamento_concluido
+  /// Backend já marcou pagamento_concluido
   @observable
   bool pagamentoConcluidoServer = false;
 
-  // -------- binds --------
+  // ===== Binds =====
   @action
-  void bindVenda(VendaModel v) {
-    venda = v;
-  }
+  void bindVenda(VendaModel v) => venda = v;
 
   @action
-  void bindNroProposta(int? nro) {
-    nroProposta = nro;
+  void bindNroProposta(int? nro) => nroProposta = nro;
+
+  // ===== Derivados do plano (única fonte de verdade) =====
+  @computed
+  int get numMonths {
+    final cycle = venda?.plano?.billingCycle ?? BillingCycle.mensal;
+    return cycle == BillingCycle.anual ? 12 : 1;
   }
 
-  // -------- UI helpers --------
+  @computed
+  int? get dueDay => venda?.plano?.dueDay;
+
+  // ===== Helpers UI =====
   @action
   void setMetodo(PayMethod m) => metodo = m;
 
   @computed
   String? get currentMyId => (metodo == PayMethod.card) ? cardMyId : pixMyId;
 
-  // -------- ações --------
+  /// Valor que DEVE ser cobrado AGORA (centavos) — mesmo cálculo do resumo.
+  @computed
+  int get valorCelcoinCentavos {
+    final v = venda;
+    if (v == null || v.plano == null) return 0;
+    final vidas = (v.dependentes?.length ?? 0) + 1;
+    final planSync = v.plano!.copyWith(vidasSelecionadas: vidas);
+    final b = computeBilling(planSync);
+    return b.valorAgoraCentavos;
+  }
+
+  @computed
+  String get valorCelcoinFmt {
+    final cents = valorCelcoinCentavos;
+    final val = cents / 100.0;
+    return 'R\$ ${val.toStringAsFixed(2).replaceAll('.', ',')}';
+  }
+
+  // ===== Ações: gerar cobranças =====
   @action
-  Future<void> gerarLinkCartao({
-    required int vidas,
-    required double mensalInd,
-    required double adesaoInd,
-  }) async {
+  Future<void> gerarLinkCartao() async {
     if (pagamentoConcluidoServer) {
       throw Exception('Pagamento já concluído para esta proposta.');
     }
     final v = venda;
     if (v == null) throw Exception('Venda não carregada.');
+
     loading = true;
     try {
-      final payload = _buildPaymentPayload(v, vidas, mensalInd, adesaoInd);
+      final payload = _buildPaymentPayload();
       final result = await _payment.gerarCartao(payload: payload);
       cardUrl = result.url;
       cardMyId = result.myId;
@@ -113,19 +130,16 @@ abstract class _FinishPaymentStoreBase with Store {
   }
 
   @action
-  Future<void> gerarPix({
-    required int vidas,
-    required double mensalInd,
-    required double adesaoInd,
-  }) async {
+  Future<void> gerarPix() async {
     if (pagamentoConcluidoServer) {
       throw Exception('Pagamento já concluído para esta proposta.');
     }
     final v = venda;
     if (v == null) throw Exception('Venda não carregada.');
+
     loading = true;
     try {
-      final payload = _buildPaymentPayload(v, vidas, mensalInd, adesaoInd);
+      final payload = _buildPaymentPayload();
       final result = await _payment.gerarPix(payload: payload);
       pixEmv = result.emv;
       pixImageBase64 = result.imageBase64;
@@ -169,14 +183,9 @@ abstract class _FinishPaymentStoreBase with Store {
     }
   }
 
-  // -------- helpers --------
-
-  Map<String, dynamic> _buildPaymentPayload(
-    VendaModel v,
-    int vidas,
-    double mensalInd,
-    double adesaoInd,
-  ) {
+  // ===== Helpers internos =====
+  Map<String, dynamic> _buildPaymentPayload() {
+    final v = venda!;
     final titular = v.pessoaTitular;
     final end = v.endereco;
 
@@ -196,9 +205,15 @@ abstract class _FinishPaymentStoreBase with Store {
       throw Exception('Contato de telefone do titular é obrigatório.');
     }
 
-    final monthlyCents = _toCents(mensalInd);
-    final enrollmentCents = _toCents(adesaoInd);
-    final valueTotal = ((monthlyCents * numMonths) + enrollmentCents) * vidas;
+    // === Valor a cobrar (centavos) — fonte única
+    final valueCents = valorCelcoinCentavos;
+
+    // Infos auxiliares (mensal/adesão) para logs/auditoria:
+    final vidas = (v.dependentes?.length ?? 0) + 1;
+    final planSync = v.plano!.copyWith(vidasSelecionadas: vidas);
+    final b = computeBilling(planSync);
+    final monthlyCents = (b.mensal * 100).round();
+    final enrollmentCents = (b.adesao * 100).round();
 
     final Map<String, dynamic> payload = {
       'username': 'somosuni',
@@ -212,8 +227,8 @@ abstract class _FinishPaymentStoreBase with Store {
       'plan': v.plano?.nomeContrato ?? 'Plano',
       'enrollment': enrollmentCents,
       'monthly': monthlyCents,
-      'value': valueTotal,
-      'numMonths': numMonths,
+      'value': valueCents,     // << valor cobrado AGORA (centavos)
+      'numMonths': numMonths,  // 12 se anual, 1 se mensal (para backend limitar parcelas)
       'numLives': vidas,
     };
 
@@ -275,7 +290,6 @@ abstract class _FinishPaymentStoreBase with Store {
   }
 
   String _digits(String v) => v.replaceAll(RegExp(r'\D'), '');
-  int _toCents(double v) => (v * 100).round();
 
   String? _pickEmail(List<ContatoModel> contatos) {
     for (final c in contatos) {

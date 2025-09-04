@@ -12,6 +12,7 @@ class SalesService {
   static const String _createProposalPath = '/database/propostas/full';
   static String _updateStatusPath(int nro) => '/database/propostas/$nro/status';
   static String _deleteProposalPath(int nro) => '/database/propostas/$nro';
+    static String _updateFullPath(int nro) => '/database/propostas/$nro/full';
 
   // =======================================================
   // LISTAR PROPOSTAS ABERTAS (com enriquecimento CPF/CEP)
@@ -25,7 +26,8 @@ class SalesService {
 
       final data = r.data;
       if (data is! List) {
-        throw Exception('Resposta inválida ao buscar propostas (lista ausente)');
+        throw Exception(
+            'Resposta inválida ao buscar propostas (lista ausente)');
       }
 
       // fromProposalJson já mapeia pagamentoConcluido / contratoAssinado / vendaFinalizada
@@ -52,8 +54,8 @@ class SalesService {
     int? gatewayPagamentoId,
   }) async {
     try {
-      final payload =
-          _mapVendaToCreatePayload(v, vendedorId, gatewayPagamentoId: gatewayPagamentoId);
+      final payload = _mapVendaToCreatePayload(v, vendedorId,
+          gatewayPagamentoId: gatewayPagamentoId);
 
       final res = await _dio.post(_createProposalPath, data: payload);
 
@@ -81,12 +83,14 @@ class SalesService {
     try {
       final body = <String, dynamic>{};
       if (vendaFinalizada != null) body['vendaFinalizada'] = vendaFinalizada;
-      if (pagamentoConcluido != null) body['pagamentoConcluido'] = pagamentoConcluido;
+      if (pagamentoConcluido != null)
+        body['pagamentoConcluido'] = pagamentoConcluido;
       if (contratoAssinado != null) body['contratoAssinado'] = contratoAssinado;
 
       await _dio.put(_updateStatusPath(nroProposta), data: body);
     } on DioException catch (e) {
-      throw Exception(_handleDioError(e, 'Erro ao atualizar status da proposta'));
+      throw Exception(
+          _handleDioError(e, 'Erro ao atualizar status da proposta'));
     } catch (e) {
       throw Exception('Erro inesperado ao atualizar status: $e');
     }
@@ -110,6 +114,23 @@ class SalesService {
         nroProposta: nroProposta,
         contratoAssinado: value,
       );
+
+
+      Future<void> atualizarProposta({
+    required int nroProposta,
+    required VendaModel v,
+  }) async {
+    try {
+      // Para update não precisamos reenviar vendedor_id; backend ignora se vier.
+      final payload = _mapVendaToCreatePayload(v, 0 /*ignored no back*/);
+
+      await _dio.put(_updateFullPath(nroProposta), data: payload);
+    } on DioException catch (e) {
+      throw Exception(_handleDioError(e, 'Erro ao atualizar proposta'));
+    } catch (e) {
+      throw Exception('Erro inesperado ao atualizar proposta: $e');
+    }
+  }
 
   // =======================================================
   // EXCLUIR (soft delete) PROPOSTA
@@ -148,9 +169,9 @@ class SalesService {
     // Aceita várias chaves que o backend pode retornar
     return _tryParseInt(
           data['nro_proposta'] ??
-          data['propostaId'] ??
-          data['id'] ??
-          data['nroProposta'],
+              data['propostaId'] ??
+              data['id'] ??
+              data['nroProposta'],
         ) ??
         _tryParseInt((data['data'] ?? const {})['nro_proposta']);
   }
@@ -169,16 +190,35 @@ class SalesService {
     final mensalTotal = v.plano?.getMensalidadeTotal();
     final adesaoTotal = v.plano?.getTaxaAdesaoTotal();
 
+    // ---- NOVO: ciclo e vencimento ----
+    // aceita enum.toString() ou .name, cai em 'mensal' por padrão
+    final rawCycle = (v.plano?.billingCycle?.toString() ?? '').toLowerCase();
+    final ciclo = rawCycle.contains('anual') ? 'anual' : 'mensal';
+
+    int? venc;
+    if (ciclo == 'mensal') {
+      final d = v.plano?.dueDay;
+      // default 10 e clamp 1..28
+      final dia = (d ?? 10);
+      venc = dia.clamp(1, 28);
+    }
+    // ----------------------------------
+
     return {
       'vendedor_id': vendedorId,
-      if (gatewayPagamentoId != null) 'gateway_pagamento_id': gatewayPagamentoId,
+      if (gatewayPagamentoId != null)
+        'gateway_pagamento_id': gatewayPagamentoId,
 
-      // Plano (backend resolve por contrato_id OU nro_contrato)
+      // Plano (backend aceita contrato_id OU nro_contrato)
       'plano': {
         'nro_contrato': v.plano?.nroContrato,
         'vidas': vidas,
         if (mensalTotal != null) 'mensalidade_total': mensalTotal,
         if (adesaoTotal != null) 'adesao_total': adesaoTotal,
+
+        // ---- NOVO: envia para o backend ----
+        'ciclo_cobranca': ciclo,
+        if (venc != null) 'dia_vencimento': venc,
       },
 
       // Titular
@@ -231,7 +271,8 @@ class SalesService {
     final out = <VendaModel>[];
 
     for (var i = 0; i < list.length; i += maxConcurrent) {
-      final end = (i + maxConcurrent > list.length) ? list.length : i + maxConcurrent;
+      final end =
+          (i + maxConcurrent > list.length) ? list.length : i + maxConcurrent;
       final slice = list.sublist(i, end);
       final futures = slice.map(_enrichVenda);
       final chunk = await Future.wait(futures);
@@ -265,7 +306,8 @@ class SalesService {
 
       return v.copyWith(
         pessoaTitular: updatedTitular ?? v.pessoaTitular,
-        pessoaResponsavelFinanceiro: updatedResp ?? v.pessoaResponsavelFinanceiro,
+        pessoaResponsavelFinanceiro:
+            updatedResp ?? v.pessoaResponsavelFinanceiro,
         dependentes: updatedDeps ?? v.dependentes,
         endereco: updatedEndereco ?? v.endereco,
       );
@@ -290,7 +332,8 @@ class SalesService {
     }
   }
 
-  Future<EnderecoModel?> _buscarCepMerge(String cep, EnderecoModel? current) async {
+  Future<EnderecoModel?> _buscarCepMerge(
+      String cep, EnderecoModel? current) async {
     try {
       final e = await _buscarCep(_digits(cep));
       return e.copyWith(
@@ -337,10 +380,7 @@ class SalesService {
         data['detalhe'],
         data['error_description'],
         data['error'],
-      ]
-          .whereType<String>()
-          .where((s) => s.trim().isNotEmpty)
-          .join(' | ');
+      ].whereType<String>().where((s) => s.trim().isNotEmpty).join(' | ');
       if (msg.isNotEmpty) return '[HTTP ${status ?? '-'}] $msg';
       return '[HTTP ${status ?? '-'}] ${data.toString()}';
     }

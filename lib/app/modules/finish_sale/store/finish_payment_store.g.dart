@@ -9,6 +9,19 @@ part of 'finish_payment_store.dart';
 // ignore_for_file: non_constant_identifier_names, unnecessary_brace_in_string_interps, unnecessary_lambdas, prefer_expression_function_bodies, lines_longer_than_80_chars, avoid_as, avoid_annotating_with_dynamic, no_leading_underscores_for_local_identifiers
 
 mixin _$FinishPaymentStore on _FinishPaymentStoreBase, Store {
+  Computed<int>? _$numMonthsComputed;
+
+  @override
+  int get numMonths =>
+      (_$numMonthsComputed ??= Computed<int>(() => super.numMonths,
+              name: '_FinishPaymentStoreBase.numMonths'))
+          .value;
+  Computed<int?>? _$dueDayComputed;
+
+  @override
+  int? get dueDay => (_$dueDayComputed ??= Computed<int?>(() => super.dueDay,
+          name: '_FinishPaymentStoreBase.dueDay'))
+      .value;
   Computed<String?>? _$currentMyIdComputed;
 
   @override
@@ -16,6 +29,20 @@ mixin _$FinishPaymentStore on _FinishPaymentStoreBase, Store {
       (_$currentMyIdComputed ??= Computed<String?>(() => super.currentMyId,
               name: '_FinishPaymentStoreBase.currentMyId'))
           .value;
+  Computed<int>? _$valorCelcoinCentavosComputed;
+
+  @override
+  int get valorCelcoinCentavos => (_$valorCelcoinCentavosComputed ??=
+          Computed<int>(() => super.valorCelcoinCentavos,
+              name: '_FinishPaymentStoreBase.valorCelcoinCentavos'))
+      .value;
+  Computed<String>? _$valorCelcoinFmtComputed;
+
+  @override
+  String get valorCelcoinFmt => (_$valorCelcoinFmtComputed ??= Computed<String>(
+          () => super.valorCelcoinFmt,
+          name: '_FinishPaymentStoreBase.valorCelcoinFmt'))
+      .value;
 
   late final _$vendaAtom =
       Atom(name: '_FinishPaymentStoreBase.venda', context: context);
@@ -46,22 +73,6 @@ mixin _$FinishPaymentStore on _FinishPaymentStoreBase, Store {
   set nroProposta(int? value) {
     _$nroPropostaAtom.reportWrite(value, super.nroProposta, () {
       super.nroProposta = value;
-    });
-  }
-
-  late final _$numMonthsAtom =
-      Atom(name: '_FinishPaymentStoreBase.numMonths', context: context);
-
-  @override
-  int get numMonths {
-    _$numMonthsAtom.reportRead();
-    return super.numMonths;
-  }
-
-  @override
-  set numMonths(int value) {
-    _$numMonthsAtom.reportWrite(value, super.numMonths, () {
-      super.numMonths = value;
     });
   }
 
@@ -247,24 +258,16 @@ mixin _$FinishPaymentStore on _FinishPaymentStoreBase, Store {
       AsyncAction('_FinishPaymentStoreBase.gerarLinkCartao', context: context);
 
   @override
-  Future<void> gerarLinkCartao(
-      {required int vidas,
-      required double mensalInd,
-      required double adesaoInd}) {
-    return _$gerarLinkCartaoAsyncAction.run(() => super.gerarLinkCartao(
-        vidas: vidas, mensalInd: mensalInd, adesaoInd: adesaoInd));
+  Future<void> gerarLinkCartao() {
+    return _$gerarLinkCartaoAsyncAction.run(() => super.gerarLinkCartao());
   }
 
   late final _$gerarPixAsyncAction =
       AsyncAction('_FinishPaymentStoreBase.gerarPix', context: context);
 
   @override
-  Future<void> gerarPix(
-      {required int vidas,
-      required double mensalInd,
-      required double adesaoInd}) {
-    return _$gerarPixAsyncAction.run(() => super
-        .gerarPix(vidas: vidas, mensalInd: mensalInd, adesaoInd: adesaoInd));
+  Future<void> gerarPix() {
+    return _$gerarPixAsyncAction.run(() => super.gerarPix());
   }
 
   late final _$consultarStatusPagamentoAsyncAction = AsyncAction(
@@ -318,7 +321,6 @@ mixin _$FinishPaymentStore on _FinishPaymentStoreBase, Store {
     return '''
 venda: ${venda},
 nroProposta: ${nroProposta},
-numMonths: ${numMonths},
 loading: ${loading},
 metodo: ${metodo},
 cardUrl: ${cardUrl},
@@ -330,7 +332,11 @@ pixMyId: ${pixMyId},
 pixLink: ${pixLink},
 paymentStatus: ${paymentStatus},
 pagamentoConcluidoServer: ${pagamentoConcluidoServer},
-currentMyId: ${currentMyId}
+numMonths: ${numMonths},
+dueDay: ${dueDay},
+currentMyId: ${currentMyId},
+valorCelcoinCentavos: ${valorCelcoinCentavos},
+valorCelcoinFmt: ${valorCelcoinFmt}
     ''';
   }
 }

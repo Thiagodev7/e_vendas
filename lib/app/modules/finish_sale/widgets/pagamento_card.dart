@@ -1,5 +1,7 @@
 // lib/app/modules/finish_sale/ui/widgets/pagamento_card.dart
 import 'dart:convert';
+import 'package:e_vendas/app/modules/finish_sale/store/finish_payment_store.dart';
+import 'package:e_vendas/app/modules/finish_sale/store/finish_types.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -11,7 +13,6 @@ import 'panel.dart';
 import 'whats_modal.dart';
 import 'package:e_vendas/app/core/model/contato_model.dart';
 import 'package:e_vendas/app/core/model/venda_model.dart';
-import 'package:e_vendas/app/modules/finish_sale/store/finish_sale_store.dart';
 
 class PagamentoCard extends StatelessWidget {
   final VendaModel venda;
@@ -20,7 +21,7 @@ class PagamentoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final store = Modular.get<FinishSaleStore>();
+    final store = Modular.get<FinishPaymentStore>();
 
     Future<void> _openUrl(String url) async {
       final uri = Uri.tryParse(url);
@@ -90,7 +91,7 @@ class PagamentoCard extends StatelessWidget {
       icon: Icons.payments_rounded,
       title: 'Pagamento',
       trailing: Observer(builder: (_) {
-        final locked = store.pagamentoConcluido;
+        final locked = store.pagamentoConcluidoServer;
         return Wrap(
           spacing: 6,
           children: [
@@ -112,7 +113,7 @@ class PagamentoCard extends StatelessWidget {
         children: [
           // Banner "já pago" / bloqueado
           Observer(builder: (_) {
-            if (!store.pagamentoConcluido) return const SizedBox.shrink();
+            if (!store.pagamentoConcluidoServer) return const SizedBox.shrink();
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(12),
@@ -155,7 +156,7 @@ class PagamentoCard extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: Observer(builder: (_) {
               final isCard = store.metodo == PayMethod.card;
-              final locked = store.pagamentoConcluido;
+              final locked = store.pagamentoConcluidoServer;
               return FilledButton.icon(
                 onPressed: (store.loading || locked)
                     ? null

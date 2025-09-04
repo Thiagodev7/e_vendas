@@ -1,24 +1,40 @@
 import 'package:e_vendas/app/core/model/plano_model.dart';
 import 'package:flutter/material.dart';
 
-/// Widget drop-in para exibir ciclo (mensal/anual), vencimento e vidas.
-/// Use em qualquer tela do finish-sale.
+/// Exibe ciclo (mensal/anual), vencimento (se mensal), vidas e valores.
+/// - Mensal: mostra mensalidade total e taxa de adesão.
+/// - Anual: aplica -10% no total (12x) e exibe o valor anual com desconto.
 class PlanBillingInfo extends StatelessWidget {
   const PlanBillingInfo({super.key, required this.plan});
 
   final PlanModel plan;
 
+  double _toDouble(String? s) {
+    if (s == null) return 0;
+    final str = s.trim();
+    // Se tiver vírgula, tratamos vírgula como decimal e ponto como milhar.
+    if (str.contains(',')) {
+      final normalized = str.replaceAll('.', '').replaceAll(',', '.');
+      return double.tryParse(normalized) ?? 0;
+    }
+    // Caso não tenha vírgula, assumimos ponto como decimal (padrão en-US).
+    return double.tryParse(str) ?? 0;
+  }
+
+  String _fmt(num v) => 'R\$ ${v.toStringAsFixed(2).replaceAll('.', ',')}';
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isMensal = plan.billingCycle == BillingCycle.mensal;
-    final venc = isMensal && plan.dueDay != null ? ' — venc. dia ${plan.dueDay}' : '';
-    final title = isMensal ? 'Mensal$venc' : 'Anual (-10%)';
 
-    // Valores
-    final mensalTotal = plan.getMensalidadeTotal();
-    final anualTotal = (double.tryParse(mensalTotal.replaceAll(',', '.')) ?? 0.0) * 12 * 0.90;
-    final anualFmt = anualTotal.toStringAsFixed(2);
+    final mensalTotal = _toDouble(plan.getMensalidadeTotal());
+    final adesaoTotal = _toDouble(plan.getTaxaAdesaoTotal());
+    final anualComDesconto = (mensalTotal * 12) * 0.9;
+
+    final vencSuffix =
+        isMensal && plan.dueDay != null ? ' — venc. dia ${plan.dueDay}' : '';
+    final tituloCiclo = isMensal ? 'Mensal$vencSuffix' : 'Anual (-10%)';
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -30,17 +46,36 @@ class PlanBillingInfo extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Ciclo de cobrança', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
-          const SizedBox(height: 4),
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-
-          const SizedBox(height: 12),
+          // Título do ciclo
           Row(
             children: [
+              Icon(
+                isMensal ? Icons.event_repeat : Icons.calendar_month,
+                size: 18,
+                color: cs.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                tituloCiclo,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Métricas
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            children: [
               _metric(context, 'Vidas', '${plan.vidasSelecionadas}'),
-              const SizedBox(width: 16),
-              if (isMensal) _metric(context, 'Mensal', 'R\$ $mensalTotal'),
-              if (!isMensal) _metric(context, 'Anual (-10%)', 'R\$ $anualFmt'),
+              if (isMensal) _metric(context, 'Mensal', _fmt(mensalTotal)),
+              if (isMensal) _metric(context, 'Adesão', _fmt(adesaoTotal)),
+              if (!isMensal)
+                _metric(context, 'Total anual (-10%)', _fmt(anualComDesconto)),
             ],
           ),
         ],
@@ -60,9 +95,12 @@ class PlanBillingInfo extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+          Text(label,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
           const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+          Text(value,
+              style:
+                  const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
         ],
       ),
     );

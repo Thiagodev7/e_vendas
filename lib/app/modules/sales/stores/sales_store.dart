@@ -262,44 +262,51 @@ abstract class _SalesStoreBase with Store {
   // -------------------- Fluxo Finalização --------------------
 
   /// Passo 1: criar/garantir a proposta e retornar o nro
-  @action
-  Future<int> finalizarVenda(int index) async {
-    if (!_indexIsValid(index)) throw Exception('Índice inválido');
-    final atual = vendas[index];
+ @action
+Future<int> finalizarVenda(int index) async {
+  if (!_indexIsValid(index)) throw Exception('Índice inválido');
+  final atual = vendas[index];
 
-    if (atual.plano == null || atual.pessoaTitular == null) {
-      throw Exception('Venda incompleta: plano e titular são obrigatórios.');
-    }
-
-    isLoading = true;
-    errorMessage = null;
-    try {
-      // Se já for cloud e já tiver nro → reaproveita
-      if (atual.origin == VendaOrigin.cloud && (atual.nroProposta != null)) {
-        return atual.nroProposta!;
-      }
-
-      // Cria na nuvem
-      const vendedorId = 22;
-      final nro = await _service.criarProposta(atual, vendedorId: vendedorId);
-
-      final atualizado = atual.copyWith(
-        origin: VendaOrigin.cloud,
-        nroProposta: nro,
-      );
-      vendas[index] = atualizado;
-
-      await _persistLocalsFromCurrentState();
-      _upsertCloudOverrideIfNeeded(index);
-
-      return nro;
-    } catch (e) {
-      errorMessage = e.toString();
-      rethrow;
-    } finally {
-      isLoading = false;
-    }
+  if (atual.plano == null || atual.pessoaTitular == null) {
+    throw Exception('Venda incompleta: plano e titular são obrigatórios.');
   }
+
+  isLoading = true;
+  errorMessage = null;
+  try {
+    // >>> SE JÁ EXISTE NA NUVEM, ATUALIZA OS DADOS ANTES DE FINALIZAR <<<
+    if (atual.origin == VendaOrigin.cloud && atual.nroProposta != null) {
+      await _service.atualizarProposta(
+        nroProposta: atual.nroProposta!,
+        v: atual,
+      );
+      // garante override local e persistência
+      _upsertCloudOverrideIfNeeded(index);
+      await _persistLocalsFromCurrentState();
+      return atual.nroProposta!;
+    }
+
+    // Caso contrário, cria na nuvem
+    const vendedorId = 22;
+    final nro = await _service.criarProposta(atual, vendedorId: vendedorId);
+
+    final atualizado = atual.copyWith(
+      origin: VendaOrigin.cloud,
+      nroProposta: nro,
+    );
+    vendas[index] = atualizado;
+
+    await _persistLocalsFromCurrentState();
+    _upsertCloudOverrideIfNeeded(index);
+
+    return nro;
+  } catch (e) {
+    errorMessage = e.toString();
+    rethrow;
+  } finally {
+    isLoading = false;
+  }
+}
 
   /// Passo 2: após pagamento e contrato ok, marca venda_finalizada = true e remove da lista
   @action
