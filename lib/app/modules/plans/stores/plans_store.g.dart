@@ -57,19 +57,19 @@ mixin _$PlansStore on _PlansStoreBase, Store {
     });
   }
 
-  late final _$selectedCycleAtom =
-      Atom(name: '_PlansStoreBase.selectedCycle', context: context);
+  late final _$selectedAnnualAtom =
+      Atom(name: '_PlansStoreBase.selectedAnnual', context: context);
 
   @override
-  ObservableMap<int, BillingCycle> get selectedCycle {
-    _$selectedCycleAtom.reportRead();
-    return super.selectedCycle;
+  ObservableMap<int, bool> get selectedAnnual {
+    _$selectedAnnualAtom.reportRead();
+    return super.selectedAnnual;
   }
 
   @override
-  set selectedCycle(ObservableMap<int, BillingCycle> value) {
-    _$selectedCycleAtom.reportWrite(value, super.selectedCycle, () {
-      super.selectedCycle = value;
+  set selectedAnnual(ObservableMap<int, bool> value) {
+    _$selectedAnnualAtom.reportWrite(value, super.selectedAnnual, () {
+      super.selectedAnnual = value;
     });
   }
 
@@ -112,11 +112,11 @@ mixin _$PlansStore on _PlansStoreBase, Store {
   }
 
   @override
-  void setCycle(int planId, BillingCycle cycle) {
+  void setAnnual(int planId, bool annual) {
     final _$actionInfo = _$_PlansStoreBaseActionController.startAction(
-        name: '_PlansStoreBase.setCycle');
+        name: '_PlansStoreBase.setAnnual');
     try {
-      return super.setCycle(planId, cycle);
+      return super.setAnnual(planId, annual);
     } finally {
       _$_PlansStoreBaseActionController.endAction(_$actionInfo);
     }
@@ -139,7 +139,7 @@ mixin _$PlansStore on _PlansStoreBase, Store {
 isLoading: ${isLoading},
 plans: ${plans},
 selectedLives: ${selectedLives},
-selectedCycle: ${selectedCycle},
+selectedAnnual: ${selectedAnnual},
 selectedDueDay: ${selectedDueDay}
     ''';
   }

@@ -1,3 +1,4 @@
+// lib/app/modules/plans/stores/plans_store.dart
 import 'package:e_vendas/app/core/model/plano_model.dart';
 import 'package:mobx/mobx.dart';
 import '../services/plans_service.dart';
@@ -19,11 +20,11 @@ abstract class _PlansStoreBase with Store {
   @observable
   ObservableMap<int, int> selectedLives = ObservableMap<int, int>();
 
-  /// NOVO: ciclo de cobrança por plano
+  /// Novo: ciclo de cobrança por plano (true = anual, false = mensal)
   @observable
-  ObservableMap<int, BillingCycle> selectedCycle = ObservableMap<int, BillingCycle>();
+  ObservableMap<int, bool> selectedAnnual = ObservableMap<int, bool>();
 
-  /// NOVO: dia de vencimento por plano (apenas para mensal)
+  /// Novo: dia de vencimento por plano (apenas para mensal)
   @observable
   ObservableMap<int, int> selectedDueDay = ObservableMap<int, int>();
 
@@ -36,46 +37,61 @@ abstract class _PlansStoreBase with Store {
 
       plans = ObservableList.of(result);
 
-      for (var plan in result) {
-        selectedLives[plan.id] = 1;
-        selectedCycle[plan.id] = BillingCycle.mensal;
-        selectedDueDay[plan.id] = 10; // default: dia 10
+      for (final plan in result) {
+        // defaults
+        selectedLives[plan.id]   = plan.vidasSelecionadas > 0 ? plan.vidasSelecionadas : 1;
+        selectedAnnual[plan.id]  = plan.isAnnual; // vem do back (is_anual) ou default do model
+        selectedDueDay[plan.id]  = plan.isAnnual ? 10 : (plan.dueDay ?? 10);
       }
-    } catch (e) {
+    } catch (_) {
       plans = ObservableList<PlanModel>();
     } finally {
       isLoading = false;
     }
   }
 
-  // ----- Setters / Getters -----
+  // ---------- Setters / Getters ----------
 
   @action
   void setLives(int planId, int lives) {
-    selectedLives[planId] = lives;
+    selectedLives[planId] = lives < 1 ? 1 : lives;
   }
 
-  int getLives(int planId) {
-    return selectedLives[planId] ?? 1;
-  }
+  int getLives(int planId) => selectedLives[planId] ?? 1;
 
+  /// Define ciclo (true = anual, false = mensal)
   @action
-  void setCycle(int planId, BillingCycle cycle) {
-    selectedCycle[planId] = cycle;
+  void setAnnual(int planId, bool annual) {
+    selectedAnnual[planId] = annual;
+    // anual não usa dueDay; mantém um default só pra UX
+    if (annual) {
+      selectedDueDay[planId] = 10;
+    }
   }
 
-  BillingCycle getCycle(int planId) {
-    return selectedCycle[planId] ?? BillingCycle.mensal;
-  }
+  bool getIsAnnual(int planId) => selectedAnnual[planId] ?? false;
 
+  /// Define dia de vencimento (1..28). Ignorado se anual, mas guardamos o valor.
   @action
   void setDueDay(int planId, int day) {
-    // segurando 1..28 para evitar meses com menos dias
-    final safe = day.clamp(1, 28);
+    final safe = day.clamp(1, 28).toInt();
     selectedDueDay[planId] = safe;
   }
 
-  int getDueDay(int planId) {
-    return selectedDueDay[planId] ?? 10;
+  int getDueDay(int planId) => selectedDueDay[planId] ?? 10;
+
+  /// Retorna o dia efetivo a enviar pro backend (null se anual)
+  int? getEffectiveDueDay(int planId) {
+    return getIsAnnual(planId) ? null : getDueDay(planId);
+  }
+
+  /// Aplica as escolhas do usuário no modelo (útil pra enviar/mostrar)
+  PlanModel applySelection(PlanModel plan) {
+    final annual = getIsAnnual(plan.id);
+    return plan.copyWith(
+      vidasSelecionadas: getLives(plan.id),
+      isAnnual: annual,
+      dueDay: annual ? null : getDueDay(plan.id),
+    );
   }
 }

@@ -1,3 +1,4 @@
+// lib/app/modules/plans/ui/plans_page.dart
 import 'package:e_vendas/app/core/model/plano_model.dart';
 import 'package:e_vendas/app/core/theme/app_colors.dart';
 import 'package:e_vendas/app/core/theme/dashboard_layout.dart';
@@ -76,12 +77,14 @@ class _PlansPageState extends State<PlansPage> {
   /// Card do Plano
   Widget _buildHorizontalCard(PlanModel plan, int? vendaIndex) {
     final vidas = store.getLives(plan.id);
-    final cycle = store.getCycle(plan.id);
-    final isMensal = cycle == BillingCycle.mensal;
+    final isAnnual = store.getIsAnnual(plan.id);
+    final isMensal = !isAnnual;
 
-    // Cálculos
-    final mensalDouble = (double.tryParse(plan.getMensalidade().replaceAll(',', '.')) ?? 0.0) * vidas;
-    final adesaoDouble = (double.tryParse(plan.getTaxaAdesao().replaceAll(',', '.')) ?? 0.0) * vidas;
+    // Cálculos com parser robusto (aceita "4300" como 43,00)
+    final mensalUnit = _parseMoney(plan.getMensalidade());
+    final adesaoUnit = _parseMoney(plan.getTaxaAdesao());
+    final mensalDouble = mensalUnit * vidas;
+    final adesaoDouble = adesaoUnit * vidas;
 
     final mensal = mensalDouble.toStringAsFixed(2);
     // Anual com 10% de desconto
@@ -179,12 +182,12 @@ class _PlansPageState extends State<PlansPage> {
                     _choice(
                       label: 'Mensal',
                       selected: isMensal,
-                      onTap: () => store.setCycle(plan.id, BillingCycle.mensal),
+                      onTap: () => store.setAnnual(plan.id, false),
                     ),
                     _choice(
                       label: 'Anual (-10%)',
-                      selected: !isMensal,
-                      onTap: () => store.setCycle(plan.id, BillingCycle.anual),
+                      selected: isAnnual,
+                      onTap: () => store.setAnnual(plan.id, true),
                     ),
                   ],
                 ),
@@ -268,14 +271,12 @@ class _PlansPageState extends State<PlansPage> {
                     vidas = (venda.dependentes?.length ?? 0) + 1;
                   }
 
-                  final selectedCycle = store.getCycle(plan.id);
-                  final selectedDue = selectedCycle == BillingCycle.mensal
-                      ? store.getDueDay(plan.id)
-                      : null;
+                  final selectedAnnual = store.getIsAnnual(plan.id);
+                  final selectedDue = selectedAnnual ? null : store.getDueDay(plan.id);
 
                   final planoSelecionado = plan.copyWith(
                     vidasSelecionadas: vidas,
-                    billingCycle: selectedCycle,
+                    isAnnual: selectedAnnual,
                     dueDay: selectedDue,
                   );
 
@@ -334,5 +335,36 @@ class _PlansPageState extends State<PlansPage> {
         ],
       ),
     );
+  }
+
+  /// Parser de valores monetários (aceita “43,00”, “43.00”, “4300” como centavos)
+  double _parseMoney(String? s) {
+    if (s == null) return 0.0;
+    final raw = s.trim();
+    if (raw.isEmpty) return 0.0;
+
+    // só dígitos => trata como centavos
+    if (RegExp(r'^\d+$').hasMatch(raw)) {
+      final cents = int.tryParse(raw) ?? 0;
+      return (cents / 100).toDouble();
+    }
+
+    var cleaned = raw.replaceAll(RegExp(r'[^\d,\.]'), '');
+    final lastComma = cleaned.lastIndexOf(',');
+    final lastDot = cleaned.lastIndexOf('.');
+    if (lastComma > lastDot) {
+      cleaned = cleaned.replaceAll('.', '').replaceAll(',', '.');
+    } else {
+      cleaned = cleaned.replaceAll(',', '');
+    }
+
+    var value = double.tryParse(cleaned) ?? 0.0;
+
+    // Heurística anti “100x”
+    if (value >= 1000) {
+      final divided = value / 100.0;
+      if (divided < 1000) value = divided;
+    }
+    return double.parse(value.toStringAsFixed(2));
   }
 }

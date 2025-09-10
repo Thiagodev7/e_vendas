@@ -20,14 +20,14 @@ class VendaCard extends StatelessWidget {
     required this.adesao,
     required this.origin,
     this.nroProposta,
-    this.billingCycle,
     this.dueDay,
     this.pagamentoConcluido,
     this.contratoAssinado,
     required this.onEditarCliente,
     required this.onEditarPlano,
     required this.onFinalizar,
-    required this.onRemover,
+    required this.onRemover, 
+    this.isAnnual,
   });
 
   final String titularNome;
@@ -39,7 +39,7 @@ class VendaCard extends StatelessWidget {
   final VendaOrigin origin;
 
   final int? nroProposta;
-  final BillingCycle? billingCycle;
+  final bool? isAnnual;
   final int? dueDay;
 
   final bool? pagamentoConcluido;
@@ -51,14 +51,11 @@ class VendaCard extends StatelessWidget {
   final VoidCallback onRemover;
 
   String? _billingLabel() {
-    if (billingCycle == null) return null;
-    if (billingCycle == BillingCycle.anual) {
-      return 'Anual (-10%)';
-    }
+    if (isAnnual == null) return null;
+    if (isAnnual!) return 'Anual (-10%)';
     final d = dueDay;
     return d != null ? 'Mensal — venc. dia $d' : 'Mensal';
-    }
-  
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +85,8 @@ class VendaCard extends StatelessWidget {
             children: [
               Container(
                 decoration: BoxDecoration(
-                  color: (isCloud ? AppColors.primary : Colors.grey).withOpacity(0.12),
+                  color: (isCloud ? AppColors.primary : Colors.grey)
+                      .withOpacity(0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -168,22 +166,30 @@ class VendaCard extends StatelessWidget {
               children: [
                 if (pagamentoConcluido != null)
                   _StatusChip(
-                    icon: pagamentoConcluido! ? Icons.check_circle : Icons.schedule,
+                    icon: pagamentoConcluido!
+                        ? Icons.check_circle
+                        : Icons.schedule,
                     label: pagamentoConcluido!
                         ? 'Pagamento concluído'
                         : 'Pagamento pendente',
-                    fg: pagamentoConcluido! ? Colors.green[700]! : cs.onSurfaceVariant,
+                    fg: pagamentoConcluido!
+                        ? Colors.green[700]!
+                        : cs.onSurfaceVariant,
                     bg: pagamentoConcluido!
                         ? Colors.green.withOpacity(0.12)
                         : cs.surfaceVariant,
                   ),
                 if (contratoAssinado != null)
                   _StatusChip(
-                    icon: contratoAssinado! ? Icons.assignment_turned_in : Icons.description,
+                    icon: contratoAssinado!
+                        ? Icons.assignment_turned_in
+                        : Icons.description,
                     label: contratoAssinado!
                         ? 'Contrato assinado'
                         : 'Contrato pendente',
-                    fg: contratoAssinado! ? Colors.green[700]! : cs.onSurfaceVariant,
+                    fg: contratoAssinado!
+                        ? Colors.green[700]!
+                        : cs.onSurfaceVariant,
                     bg: contratoAssinado!
                         ? Colors.green.withOpacity(0.12)
                         : cs.surfaceVariant,

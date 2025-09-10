@@ -52,7 +52,7 @@ double _toDoubleBr(String? s) {
 
 /// Pró-rata = dias restantes do mês atual (independe do dia de vencimento).
 BillingBreakdown computeBilling(PlanModel plan, {DateTime? now}) {
-  final isMensal = plan.billingCycle == BillingCycle.mensal;
+  final isMensal = !plan.isAnnual;
   final mensal = _toDoubleBr(plan.getMensalidadeTotal());
   final adesao = _toDoubleBr(plan.getTaxaAdesaoTotal());
 

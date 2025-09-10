@@ -12,7 +12,7 @@ class SalesService {
   static const String _createProposalPath = '/database/propostas/full';
   static String _updateStatusPath(int nro) => '/database/propostas/$nro/status';
   static String _deleteProposalPath(int nro) => '/database/propostas/$nro';
-    static String _updateFullPath(int nro) => '/database/propostas/$nro/full';
+  static String _updateFullPath(int nro) => '/database/propostas/$nro/full';
 
   // =======================================================
   // LISTAR PROPOSTAS ABERTAS (com enriquecimento CPF/CEP)
@@ -115,8 +115,7 @@ class SalesService {
         contratoAssinado: value,
       );
 
-
-      Future<void> atualizarProposta({
+  Future<void> atualizarProposta({
     required int nroProposta,
     required VendaModel v,
   }) async {
@@ -192,13 +191,11 @@ class SalesService {
 
     // ---- NOVO: ciclo e vencimento ----
     // aceita enum.toString() ou .name, cai em 'mensal' por padrão
-    final rawCycle = (v.plano?.billingCycle?.toString() ?? '').toLowerCase();
-    final ciclo = rawCycle.contains('anual') ? 'anual' : 'mensal';
+    final isAnnual = v.plano?.isAnnual == true;
 
     int? venc;
-    if (ciclo == 'mensal') {
+    if (!isAnnual) {
       final d = v.plano?.dueDay;
-      // default 10 e clamp 1..28
       final dia = (d ?? 10);
       venc = dia.clamp(1, 28);
     }
@@ -215,9 +212,8 @@ class SalesService {
         'vidas': vidas,
         if (mensalTotal != null) 'mensalidade_total': mensalTotal,
         if (adesaoTotal != null) 'adesao_total': adesaoTotal,
-
-        // ---- NOVO: envia para o backend ----
-        'ciclo_cobranca': ciclo,
+        // NOVO: bool no back
+        'is_anual': isAnnual,
         if (venc != null) 'dia_vencimento': venc,
       },
 

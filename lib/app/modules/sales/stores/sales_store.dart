@@ -118,8 +118,8 @@ abstract class _SalesStoreBase with Store {
     // e só sobrescreve dados de cadastro/endereço/contatos/plano.
     return cloud.copyWith(
       pessoaTitular: override.pessoaTitular ?? cloud.pessoaTitular,
-      pessoaResponsavelFinanceiro:
-          override.pessoaResponsavelFinanceiro ?? cloud.pessoaResponsavelFinanceiro,
+      pessoaResponsavelFinanceiro: override.pessoaResponsavelFinanceiro ??
+          cloud.pessoaResponsavelFinanceiro,
       dependentes: override.dependentes ?? cloud.dependentes,
       endereco: override.endereco ?? cloud.endereco,
       contatos: override.contatos ?? cloud.contatos,
@@ -148,12 +148,12 @@ abstract class _SalesStoreBase with Store {
     if (p == null) return null;
 
     final vidas = (v.dependentes?.length ?? 0) + 1;
-    final cycle = p.billingCycle; // mantém o ciclo já escolhido
-    final due = cycle == BillingCycle.mensal ? (p.dueDay ?? 10) : null;
+    final isAnnual = p.isAnnual == true;
+    final due = isAnnual ? null : (p.dueDay ?? 10);
 
     return p.copyWith(
       vidasSelecionadas: vidas,
-      billingCycle: cycle,
+      isAnnual: isAnnual,
       dueDay: due,
     );
   }
@@ -262,51 +262,51 @@ abstract class _SalesStoreBase with Store {
   // -------------------- Fluxo Finalização --------------------
 
   /// Passo 1: criar/garantir a proposta e retornar o nro
- @action
-Future<int> finalizarVenda(int index) async {
-  if (!_indexIsValid(index)) throw Exception('Índice inválido');
-  final atual = vendas[index];
+  @action
+  Future<int> finalizarVenda(int index) async {
+    if (!_indexIsValid(index)) throw Exception('Índice inválido');
+    final atual = vendas[index];
 
-  if (atual.plano == null || atual.pessoaTitular == null) {
-    throw Exception('Venda incompleta: plano e titular são obrigatórios.');
-  }
-
-  isLoading = true;
-  errorMessage = null;
-  try {
-    // >>> SE JÁ EXISTE NA NUVEM, ATUALIZA OS DADOS ANTES DE FINALIZAR <<<
-    if (atual.origin == VendaOrigin.cloud && atual.nroProposta != null) {
-      await _service.atualizarProposta(
-        nroProposta: atual.nroProposta!,
-        v: atual,
-      );
-      // garante override local e persistência
-      _upsertCloudOverrideIfNeeded(index);
-      await _persistLocalsFromCurrentState();
-      return atual.nroProposta!;
+    if (atual.plano == null || atual.pessoaTitular == null) {
+      throw Exception('Venda incompleta: plano e titular são obrigatórios.');
     }
 
-    // Caso contrário, cria na nuvem
-    const vendedorId = 22;
-    final nro = await _service.criarProposta(atual, vendedorId: vendedorId);
+    isLoading = true;
+    errorMessage = null;
+    try {
+      // >>> SE JÁ EXISTE NA NUVEM, ATUALIZA OS DADOS ANTES DE FINALIZAR <<<
+      if (atual.origin == VendaOrigin.cloud && atual.nroProposta != null) {
+        await _service.atualizarProposta(
+          nroProposta: atual.nroProposta!,
+          v: atual,
+        );
+        // garante override local e persistência
+        _upsertCloudOverrideIfNeeded(index);
+        await _persistLocalsFromCurrentState();
+        return atual.nroProposta!;
+      }
 
-    final atualizado = atual.copyWith(
-      origin: VendaOrigin.cloud,
-      nroProposta: nro,
-    );
-    vendas[index] = atualizado;
+      // Caso contrário, cria na nuvem
+      const vendedorId = 22;
+      final nro = await _service.criarProposta(atual, vendedorId: vendedorId);
 
-    await _persistLocalsFromCurrentState();
-    _upsertCloudOverrideIfNeeded(index);
+      final atualizado = atual.copyWith(
+        origin: VendaOrigin.cloud,
+        nroProposta: nro,
+      );
+      vendas[index] = atualizado;
 
-    return nro;
-  } catch (e) {
-    errorMessage = e.toString();
-    rethrow;
-  } finally {
-    isLoading = false;
+      await _persistLocalsFromCurrentState();
+      _upsertCloudOverrideIfNeeded(index);
+
+      return nro;
+    } catch (e) {
+      errorMessage = e.toString();
+      rethrow;
+    } finally {
+      isLoading = false;
+    }
   }
-}
 
   /// Passo 2: após pagamento e contrato ok, marca venda_finalizada = true e remove da lista
   @action
@@ -354,7 +354,7 @@ Future<int> finalizarVenda(int index) async {
     // garante dueDay quando mensal + vidas coerentes com dependentes atuais
     final atual = vendas[index];
     var fixed = plan;
-    if (fixed.billingCycle == BillingCycle.mensal && fixed.dueDay == null) {
+    if ((fixed.isAnnual != true) && fixed.dueDay == null) {
       fixed = fixed.copyWith(dueDay: 10);
     }
     final v = atual.copyWith(plano: fixed);
@@ -375,7 +375,8 @@ Future<int> finalizarVenda(int index) async {
   }
 
   @action
-  Future<void> atualizarResponsavelFinanceiro(int index, PessoaModel resp) async {
+  Future<void> atualizarResponsavelFinanceiro(
+      int index, PessoaModel resp) async {
     if (!_indexIsValid(index)) return;
     final v = vendas[index].copyWith(pessoaResponsavelFinanceiro: resp);
     vendas[index] = v;

@@ -47,8 +47,7 @@ class VendasGrid extends StatelessWidget {
             final mensalidade = planCalc?.getMensalidadeTotal() ?? '0,00';
             final adesao = planCalc?.getTaxaAdesaoTotal() ?? '0,00';
 
-            final planoNome =
-                planCalc?.nomeContrato ?? 'Plano não selecionado';
+            final planoNome = planCalc?.nomeContrato ?? 'Plano não selecionado';
             final codigoPlano = planCalc?.codigoPlano ?? '';
 
             return VendaCard(
@@ -64,7 +63,7 @@ class VendasGrid extends StatelessWidget {
               nroProposta: venda.nroProposta,
 
               // Ciclo e vencimento (se existirem no plano)
-              billingCycle: venda.plano?.billingCycle,
+              isAnnual: venda.plano?.isAnnual,
               dueDay: venda.plano?.dueDay,
 
               // OPCIONAL: chips extras
@@ -104,7 +103,8 @@ class VendasGrid extends StatelessWidget {
                 }
 
                 if (!temCliente) {
-                  _toast(context, 'Complete os dados do cliente para continuar.');
+                  _toast(
+                      context, 'Complete os dados do cliente para continuar.');
                   Modular.to.pushNamed(
                     '/client',
                     arguments: {

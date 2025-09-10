@@ -28,6 +28,13 @@ class ContratoCard extends StatelessWidget {
       }
     }
 
+    String _fmtLast(DateTime? dt) {
+      if (dt == null) return '—';
+      final h = dt.hour.toString().padLeft(2, '0');
+      final m = dt.minute.toString().padLeft(2, '0');
+      return '$h:$m';
+    }
+
     String _toCurrency(String? raw) {
       if (raw == null || raw.trim().isEmpty) return 'R\$ 0,00';
       var s = raw.replaceAll(RegExp(r'[^\d,\. ,]'), '');
@@ -118,6 +125,32 @@ class ContratoCard extends StatelessWidget {
                     backgroundColor: cs.surface,
                     side: BorderSide(color: cs.outlineVariant),
                   ),
+                  OutlinedButton.icon(
+                  onPressed: (contractStore.checking || contractStore.loading || contractStore.nroProposta == null)
+                      ? null
+                      : () async {
+                          final flags = await contractStore.syncFlags();
+
+                          // Reflete o pagamento na store de pagamento (libera o botão)
+                          if (flags != null) {
+                            paymentStore.pagamentoConcluidoServer = flags.pagamentoConcluido;
+                          }
+
+                          final msg = (flags == null)
+                              ? 'Não foi possível atualizar agora.'
+                              : (flags.contratoAssinado
+                                  ? 'Contrato assinado.'
+                                  : 'Contrato ainda pendente.');
+                          _toast(context, 'Status atualizado • $msg');
+                        },
+                  icon: contractStore.checking
+                      ? const SizedBox(
+                          width: 16, height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh),
+                  label: Text('Verificar contrato  (${_fmtLast(contractStore.lastCheckedAt)})'),
+                ),
               ],
             ),
           ],

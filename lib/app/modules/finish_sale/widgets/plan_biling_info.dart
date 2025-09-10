@@ -26,7 +26,7 @@ class PlanBillingInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isMensal = plan.billingCycle == BillingCycle.mensal;
+    final isMensal = !plan.isAnnual;
 
     final mensalTotal = _toDouble(plan.getMensalidadeTotal());
     final adesaoTotal = _toDouble(plan.getTaxaAdesaoTotal());

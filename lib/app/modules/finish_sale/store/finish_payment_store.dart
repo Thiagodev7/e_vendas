@@ -74,10 +74,7 @@ abstract class _FinishPaymentStoreBase with Store {
 
   // ===== Derivados do plano (única fonte de verdade) =====
   @computed
-  int get numMonths {
-    final cycle = venda?.plano?.billingCycle ?? BillingCycle.mensal;
-    return cycle == BillingCycle.anual ? 12 : 1;
-  }
+  int get numMonths => (venda?.plano?.isAnnual ?? false) ? 12 : 1;
 
   @computed
   int? get dueDay => venda?.plano?.dueDay;
@@ -227,8 +224,9 @@ abstract class _FinishPaymentStoreBase with Store {
       'plan': v.plano?.nomeContrato ?? 'Plano',
       'enrollment': enrollmentCents,
       'monthly': monthlyCents,
-      'value': valueCents,     // << valor cobrado AGORA (centavos)
-      'numMonths': numMonths,  // 12 se anual, 1 se mensal (para backend limitar parcelas)
+      'value': valueCents, // << valor cobrado AGORA (centavos)
+      'numMonths':
+          numMonths, // 12 se anual, 1 se mensal (para backend limitar parcelas)
       'numLives': vidas,
     };
 

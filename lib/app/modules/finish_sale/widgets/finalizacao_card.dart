@@ -53,32 +53,7 @@ class FinalizacaoCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                OutlinedButton.icon(
-                  onPressed: (contractStore.checking || contractStore.loading || contractStore.nroProposta == null)
-                      ? null
-                      : () async {
-                          final flags = await contractStore.syncFlags();
-
-                          // Reflete o pagamento na store de pagamento (libera o botão)
-                          if (flags != null) {
-                            paymentStore.pagamentoConcluidoServer = flags.pagamentoConcluido;
-                          }
-
-                          final msg = (flags == null)
-                              ? 'Não foi possível atualizar agora.'
-                              : (flags.contratoAssinado
-                                  ? 'Contrato assinado.'
-                                  : 'Contrato ainda pendente.');
-                          _toast(context, 'Status atualizado • $msg');
-                        },
-                  icon: contractStore.checking
-                      ? const SizedBox(
-                          width: 16, height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh),
-                  label: Text('Verificar contrato  (${_fmtLast(contractStore.lastCheckedAt)})'),
-                ),
+                
                 FilledButton.icon(
                   onPressed: (!pode || contractStore.loading)
                       ? null

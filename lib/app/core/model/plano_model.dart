@@ -2,9 +2,6 @@
 import 'dart:convert';
 import 'package:e_vendas/app/core/model/values_of_ccontract_model.dart';
 
-/// Ciclo de cobrança do plano
-enum BillingCycle { mensal, anual }
-
 class PlanModel {
   final int id;
   final String codigoPlano;
@@ -15,22 +12,25 @@ class PlanModel {
   /// Quantidade de vidas selecionadas
   final int vidasSelecionadas;
 
-  /// NOVO: ciclo de cobrança (mensal/anual)
-  final BillingCycle billingCycle;
+  /// NOVO: cobrança anual?
+  final bool isAnnual;
 
   /// NOVO: dia de vencimento (apenas quando mensal). 1..28 recomendado
   final int? dueDay;
 
-  PlanModel({
+  const PlanModel({
     required this.id,
     required this.codigoPlano,
     required this.nroContrato,
     required this.nomeContrato,
     required this.values,
     this.vidasSelecionadas = 1,
-    this.billingCycle = BillingCycle.mensal,
+    this.isAnnual = false,
     this.dueDay,
   });
+
+  /// Conveniência
+  int get months => isAnnual ? 12 : 1;
 
   PlanModel copyWith({
     int? id,
@@ -39,7 +39,7 @@ class PlanModel {
     String? nomeContrato,
     List<ValuesOfContractModel>? values,
     int? vidasSelecionadas,
-    BillingCycle? billingCycle,
+    bool? isAnnual,
     int? dueDay,
   }) {
     return PlanModel(
@@ -49,8 +49,8 @@ class PlanModel {
       nomeContrato: nomeContrato ?? this.nomeContrato,
       values: values ?? this.values,
       vidasSelecionadas: vidasSelecionadas ?? this.vidasSelecionadas,
-      billingCycle: billingCycle ?? this.billingCycle,
-      dueDay: dueDay ?? this.dueDay,
+      isAnnual: isAnnual ?? this.isAnnual,
+      dueDay: (isAnnual ?? this.isAnnual) ? null : (dueDay ?? this.dueDay),
     );
   }
 
@@ -62,39 +62,57 @@ class PlanModel {
       'nome_contrato': nomeContrato,
       'values': values.map((x) => x.toMap()).toList(),
       'vidas_selecionadas': vidasSelecionadas,
-      'billing_cycle': billingCycle.name, // 'mensal' | 'anual'
-      'due_day': dueDay,
+      // Backend novo
+      'is_anual': isAnnual,
+      'dia_vencimento': isAnnual ? null : dueDay,
     };
   }
 
+  /// Payload exatamente no formato do backend
+  Map<String, dynamic> toBackendMap() => {
+        'nro_contrato': nroContrato,
+        'vidas': vidasSelecionadas,
+        'is_anual': isAnnual,
+        'dia_vencimento': isAnnual ? null : (dueDay ?? 10),
+      };
+
   factory PlanModel.fromMap(Map<String, dynamic> map) {
+    final int id =
+        map['id'] is int ? map['id'] : (int.tryParse('${map['id']}') ?? 0);
+    final int nroContrato = map['nro_contrato'] is int
+        ? map['nro_contrato']
+        : (int.tryParse('${map['nro_contrato']}') ?? 0);
+
+    final bool isAnnual = _asBool(map['is_anual']) ?? false;
+    final int? dueDay =
+        isAnnual ? null : _asInt(map['dia_vencimento']); // mensal => dia
+
+    final rawValues = (map['values'] as List?) ?? const [];
+    final values = rawValues
+        .map((x) => ValuesOfContractModel.fromMap(
+              x as Map<String, dynamic>,
+            ))
+        .toList();
+
     return PlanModel(
-      id: map['id'] ?? 0,
-      codigoPlano: map['codigo_plano'] ?? '',
-      nroContrato: map['nro_contrato'] ?? 0,
-      nomeContrato: map['nome_contrato'] ?? '',
-      values: List<ValuesOfContractModel>.from(
-        (map['values'] as List<dynamic>).map(
-          (x) => ValuesOfContractModel.fromMap(x),
-        ),
-      ),
-      vidasSelecionadas: map['vidas_selecionadas'] ?? 1,
-      billingCycle: _parseCycle(map['billing_cycle']),
-      dueDay: map['due_day'],
+      id: id,
+      codigoPlano: (map['codigo_plano'] ?? map['codigoPlano'] ?? '').toString(),
+      nroContrato: nroContrato,
+      nomeContrato:
+          (map['nome_contrato'] ?? map['nomeContrato'] ?? '').toString(),
+      values: values,
+      vidasSelecionadas:
+          _asInt(map['vidas_selecionadas'] ?? map['vidasSelecionadas']) ?? 1,
+      isAnnual: isAnnual,
+      dueDay: dueDay,
     );
   }
 
-  static BillingCycle _parseCycle(dynamic raw) {
-    final s = (raw ?? 'mensal').toString().toLowerCase();
-    return s == 'anual' ? BillingCycle.anual : BillingCycle.mensal;
-  }
-
   String toJson() => json.encode(toMap());
-
   factory PlanModel.fromJson(String source) =>
       PlanModel.fromMap(json.decode(source));
 
-  /// Valor unitário da mensalidade p/ a qtde de vidas selecionadas
+  // ===== Helpers de valores =====
   String getMensalidade() {
     final mensal = values.firstWhere(
       (v) => v.descricao == 'Mensalidade' && v.qtdeVida == vidasSelecionadas,
@@ -109,7 +127,6 @@ class PlanModel {
     return mensal.valor;
   }
 
-  /// Valor unitário da taxa de adesão p/ a qtde de vidas selecionadas
   String getTaxaAdesao() {
     final adesao = values.firstWhere(
       (v) => v.descricao == 'Taxa de Adesão' && v.qtdeVida == vidasSelecionadas,
@@ -124,7 +141,6 @@ class PlanModel {
     return adesao.valor;
   }
 
-  /// Total mensal (somando todas as vidas)
   String getMensalidadeTotal() {
     final mensal = values.firstWhere(
       (v) => v.descricao == 'Mensalidade' && v.qtdeVida == vidasSelecionadas,
@@ -139,7 +155,6 @@ class PlanModel {
     return mensal.valorTotal;
   }
 
-  /// Total da taxa de adesão (somando todas as vidas)
   String getTaxaAdesaoTotal() {
     final adesao = values.firstWhere(
       (v) => v.descricao == 'Taxa de Adesão' && v.qtdeVida == vidasSelecionadas,
@@ -155,14 +170,34 @@ class PlanModel {
   }
 
   String getAnualTotal() {
-  final mensal = double.tryParse(getMensalidadeTotal().replaceAll(',', '.')) ?? 0.0;
-  final anualComDesconto = mensal * 12 * 0.90;
-  return anualComDesconto.toStringAsFixed(2);
-}
+    final mensal = double.tryParse(
+          getMensalidadeTotal().replaceAll(',', '.'),
+        ) ??
+        0.0;
+    final anualComDesconto = mensal * 12 * 0.90;
+    return anualComDesconto.toStringAsFixed(2);
+  }
 
   @override
   String toString() {
     return 'PlanModel(id: $id, codigoPlano: $codigoPlano, vidasSelecionadas: $vidasSelecionadas, '
-           'nomeContrato: $nomeContrato, billingCycle: ${billingCycle.name}, dueDay: $dueDay)';
+        'nomeContrato: $nomeContrato, isAnnual: $isAnnual, dueDay: $dueDay)';
+  }
+
+  // ===== parse helpers =====
+  static int? _asInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is String) return int.tryParse(v);
+    return null;
+  }
+
+  static bool? _asBool(dynamic v) {
+    if (v == null) return null;
+    if (v is bool) return v;
+    final s = v.toString().toLowerCase().trim();
+    if (s == 'true' || s == '1') return true;
+    if (s == 'false' || s == '0') return false;
+    return null;
   }
 }
