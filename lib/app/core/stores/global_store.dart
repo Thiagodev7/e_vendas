@@ -12,7 +12,13 @@ abstract class _GlobalStoreBase with Store {
   Map<String, dynamic>? vendedor;
 
   @computed
-  String get vendedorNome => vendedor?['nome_completo'] ?? 'Carregando...';
+  String get vendedorNome => (vendedor?['nome_completo'] ?? '').toString().trim().isEmpty
+      ? 'Carregando...'
+      : vendedor!['nome_completo'];
+
+  /// CPF do vendedor logado (string, pode vir vazio se não carregado)
+  @computed
+  String get vendedorCpf => (vendedor?['cpf'] ?? '').toString();
 
   @action
   void setVendedor(Map<String, dynamic> dados) {

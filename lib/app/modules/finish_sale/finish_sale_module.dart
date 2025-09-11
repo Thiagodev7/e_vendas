@@ -1,7 +1,9 @@
 import 'package:e_vendas/app/core/stores/global_store.dart';
 import 'package:e_vendas/app/modules/finish_sale/page/finish_sale_page.dart';
 import 'package:e_vendas/app/modules/finish_sale/service/contract_service.dart';
+import 'package:e_vendas/app/modules/finish_sale/service/datanext_service.dart';
 import 'package:e_vendas/app/modules/finish_sale/service/payment_service.dart';
+import 'package:e_vendas/app/modules/finish_sale/store/finalizacao_store.dart';
 import 'package:e_vendas/app/modules/finish_sale/store/finish_contract_store.dart';
 import 'package:e_vendas/app/modules/finish_sale/store/finish_payment_store.dart';
 import 'package:e_vendas/app/modules/finish_sale/store/finish_resumo_store.dart';
@@ -16,6 +18,7 @@ class FinishSaleModule extends Module {
     i.addLazySingleton(SalesService.new);
     i.addLazySingleton(PaymentService.new);
     i.addLazySingleton(ContractService.new);
+    i.addLazySingleton(DatanextService.new);
 
     // Global (se já houver em outro módulo raiz, remova daqui)
     i.addLazySingleton(GlobalStore.new);
@@ -25,6 +28,7 @@ class FinishSaleModule extends Module {
     i.addLazySingleton(FinishPaymentStore.new);    // pagamentos
     i.addLazySingleton(FinishContractStore.new);   // contrato (DocuSign)
     i.addLazySingleton(FinishResumoStore.new);     // cálculo/resumo de valores
+    i.addLazySingleton(FinalizacaoStore.new);       // finalização (Datanext)
 
     // Store de vendas (lista/CRUD)
     i.addLazySingleton(SalesStore.new);

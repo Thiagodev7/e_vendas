@@ -16,6 +16,13 @@ mixin _$GlobalStore on _GlobalStoreBase, Store {
       (_$vendedorNomeComputed ??= Computed<String>(() => super.vendedorNome,
               name: '_GlobalStoreBase.vendedorNome'))
           .value;
+  Computed<String>? _$vendedorCpfComputed;
+
+  @override
+  String get vendedorCpf =>
+      (_$vendedorCpfComputed ??= Computed<String>(() => super.vendedorCpf,
+              name: '_GlobalStoreBase.vendedorCpf'))
+          .value;
 
   late final _$vendedorAtom =
       Atom(name: '_GlobalStoreBase.vendedor', context: context);
@@ -118,7 +125,8 @@ mixin _$GlobalStore on _GlobalStoreBase, Store {
 vendedor: ${vendedor},
 vendasAbertas: ${vendasAbertas},
 vendasFinalizadas: ${vendasFinalizadas},
-vendedorNome: ${vendedorNome}
+vendedorNome: ${vendedorNome},
+vendedorCpf: ${vendedorCpf}
     ''';
   }
 }
