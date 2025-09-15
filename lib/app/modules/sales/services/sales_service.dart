@@ -1,8 +1,10 @@
+// lib/app/modules/sales/services/sales_service.dart
 import 'package:dio/dio.dart';
 import 'package:e_vendas/app/core/config/api_client.dart';
 import 'package:e_vendas/app/core/model/contato_model.dart';
 import 'package:e_vendas/app/core/model/endereco_model.dart';
 import 'package:e_vendas/app/core/model/pessoa_model.dart';
+import 'package:e_vendas/app/core/model/recent_sale_model.dart';
 import 'package:e_vendas/app/core/model/venda_model.dart';
 
 class SalesService {
@@ -29,7 +31,6 @@ class SalesService {
         throw Exception(
             'Resposta inválida ao buscar propostas (lista ausente)');
       }
-
       // fromProposalJson já mapeia pagamentoConcluido / contratoAssinado / vendaFinalizada
       final base = data
           .cast<Map<String, dynamic>>()
@@ -46,7 +47,7 @@ class SalesService {
   }
 
   // =======================================================
-  // CRIAR PROPOSTA
+  // CRIAR PROPOSTA (FULL) — envia valor_venda (mensalidade total)
   // =======================================================
   Future<int> criarProposta(
     VendaModel v, {
@@ -115,6 +116,9 @@ class SalesService {
         contratoAssinado: value,
       );
 
+  // =======================================================
+  // ATUALIZAR PROPOSTA (FULL) — envia valor_venda (mensalidade total)
+  // =======================================================
   Future<void> atualizarProposta({
     required int nroProposta,
     required VendaModel v,
@@ -175,6 +179,14 @@ class SalesService {
         _tryParseInt((data['data'] ?? const {})['nro_proposta']);
   }
 
+  /// Calcula o `valor_venda` como **mensalidade total** (considerando as vidas).
+double? _computeValorVenda(VendaModel v) {
+  if (v.valorVenda != null) return double.parse(v.valorVenda!.toStringAsFixed(2));
+  final total = v.plano?.getMensalidadeTotalDouble(); // ⬅️ usa o helper numérico novo
+  if (total == null) return null;
+  return double.parse(total.toStringAsFixed(2));
+}
+
   Map<String, dynamic> _mapVendaToCreatePayload(
     VendaModel v,
     int vendedorId, {
@@ -186,13 +198,11 @@ class SalesService {
     final contatos = v.contatos ?? <ContatoModel>[];
 
     final vidas = (v.dependentes?.length ?? 0) + 1;
-    final mensalTotal = v.plano?.getMensalidadeTotal();
+    final mensalTotal = v.plano?.getMensalidadeTotal(); // total mensal (vidas)
     final adesaoTotal = v.plano?.getTaxaAdesaoTotal();
 
     // ---- NOVO: ciclo e vencimento ----
-    // aceita enum.toString() ou .name, cai em 'mensal' por padrão
     final isAnnual = v.plano?.isAnnual == true;
-
     int? venc;
     if (!isAnnual) {
       final d = v.plano?.dueDay;
@@ -201,7 +211,7 @@ class SalesService {
     }
     // ----------------------------------
 
-    return {
+    final payload = <String, dynamic>{
       'vendedor_id': vendedorId,
       if (gatewayPagamentoId != null)
         'gateway_pagamento_id': gatewayPagamentoId,
@@ -212,7 +222,6 @@ class SalesService {
         'vidas': vidas,
         if (mensalTotal != null) 'mensalidade_total': mensalTotal,
         if (adesaoTotal != null) 'adesao_total': adesaoTotal,
-        // NOVO: bool no back
         'is_anual': isAnnual,
         if (venc != null) 'dia_vencimento': venc,
       },
@@ -257,6 +266,14 @@ class SalesService {
               })
           .toList(),
     };
+
+    // >>> valor_venda SOMENTE nos FULL (create/update) <<<
+    final valorVenda = _computeValorVenda(v);
+    if (valorVenda != null) {
+      payload['valor_venda'] = valorVenda;
+    }
+
+    return payload;
   }
 
   // =======================================================
@@ -300,15 +317,18 @@ class SalesService {
         updatedEndereco = await _buscarCepMerge(cep, v.endereco);
       }
 
+      // Atualiza também valorVenda localmente se o plano existir
+      final valorVenda = _computeValorVenda(v);
+
       return v.copyWith(
         pessoaTitular: updatedTitular ?? v.pessoaTitular,
         pessoaResponsavelFinanceiro:
             updatedResp ?? v.pessoaResponsavelFinanceiro,
         dependentes: updatedDeps ?? v.dependentes,
         endereco: updatedEndereco ?? v.endereco,
+        valorVenda: valorVenda ?? v.valorVenda,
       );
     } catch (_) {
-      // Se qualquer enriquecimento falhar, retorna a venda original
       return v;
     }
   }
@@ -396,5 +416,26 @@ class SalesService {
       return '$defaultMessage (HTTP $status)';
     }
     return defaultMessage;
+  }
+
+  Future<List<RecentSaleModel>> fetchRecentSales({
+    required int vendedorId,
+    int limit = 10,
+  }) async {
+    try {
+      final r = await _dio.get(
+        '/database/propostas/recentes',
+        queryParameters: {'vendedorId': vendedorId, 'limit': limit},
+      );
+      final data = r.data;
+      if (data is! List) return const <RecentSaleModel>[];
+      return data
+          .cast<Map<String, dynamic>>()
+          .map((e) => RecentSaleModel.fromMap(e))         
+          .toList();
+    } catch (e) {
+      // silencioso para não travar dashboard
+      return const <RecentSaleModel>[];
+    }
   }
 }

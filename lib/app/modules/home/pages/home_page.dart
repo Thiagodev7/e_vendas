@@ -1,3 +1,4 @@
+import 'package:e_vendas/app/modules/home/widgets/recent_sales_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_modular/flutter_modular.dart';
@@ -27,10 +28,11 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Observer(
       builder: (_) {
-        final vendedorNome = store.vendedorData?['nome_completo'] ?? 'Carregando...';
+        final vendedorNome =
+            store.vendedorData?['nome_completo'] ?? 'Carregando...';
 
         return DashboardLayout(
-          title: 'e-Vendas',
+          title: 'Portal de Vendas',
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -44,14 +46,15 @@ class _HomePageState extends State<HomePage> {
                           children: [
                             Expanded(child: _buildMetricsGrid()),
                             const SizedBox(width: 24),
-                            Expanded(child: _buildRecentSales()),
+                            Expanded(child: RecentSalesCard(vendedorId: 12, limit: 8),),
                           ],
                         )
                       : ListView(
                           children: [
                             _buildMetricsGrid(),
                             const SizedBox(height: 24),
-                            _buildRecentSales(),
+                            // exemplo dentro do grid/coluna
+                            const RecentSalesCard(vendedorId: 12, limit: 8),
                           ],
                         ),
                 ),

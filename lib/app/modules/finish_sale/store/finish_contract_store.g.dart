@@ -216,12 +216,14 @@ mixin _$FinishContractStore on _FinishContractStoreBase, Store {
         .gerarContrato(enrollmentFmt: enrollmentFmt, monthlyFmt: monthlyFmt));
   }
 
-  late final _$finalizarVendaAsyncAction =
-      AsyncAction('_FinishContractStoreBase.finalizarVenda', context: context);
+  late final _$conferirAssinaturaDocuSignAsyncAction = AsyncAction(
+      '_FinishContractStoreBase.conferirAssinaturaDocuSign',
+      context: context);
 
   @override
-  Future<void> finalizarVenda() {
-    return _$finalizarVendaAsyncAction.run(() => super.finalizarVenda());
+  Future<DocusignStatus?> conferirAssinaturaDocuSign() {
+    return _$conferirAssinaturaDocuSignAsyncAction
+        .run(() => super.conferirAssinaturaDocuSign());
   }
 
   late final _$_FinishContractStoreBaseActionController =
@@ -239,7 +241,7 @@ mixin _$FinishContractStore on _FinishContractStoreBase, Store {
   }
 
   @override
-  void bindNroProposta(int? nro) {
+  void bindNroProposta(dynamic nro) {
     final _$actionInfo = _$_FinishContractStoreBaseActionController.startAction(
         name: '_FinishContractStoreBase.bindNroProposta');
     try {

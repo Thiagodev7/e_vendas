@@ -170,7 +170,7 @@ abstract class _SalesStoreBase with Store {
       final local = await _loadLocalVendas();
 
       // ajuste se tiver no GlobalStore (ex.: _global.userId)
-      const vendedorId = 22;
+      const vendedorId = 12;
       var cloud = await _service.fetchOpenProposals(vendedorId: vendedorId);
 
       // aplica overrides locais sobre o que veio da nuvem (apenas campos de cadastro/plano)
@@ -287,7 +287,7 @@ abstract class _SalesStoreBase with Store {
       }
 
       // Caso contrário, cria na nuvem
-      const vendedorId = 22;
+      const vendedorId = 12;
       final nro = await _service.criarProposta(atual, vendedorId: vendedorId);
 
       final atualizado = atual.copyWith(

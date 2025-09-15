@@ -41,6 +41,22 @@ mixin _$FinalizacaoStore on _FinalizacaoStoreBase, Store {
     });
   }
 
+  late final _$lastErrorAtom =
+      Atom(name: '_FinalizacaoStoreBase.lastError', context: context);
+
+  @override
+  Map<String, dynamic>? get lastError {
+    _$lastErrorAtom.reportRead();
+    return super.lastError;
+  }
+
+  @override
+  set lastError(Map<String, dynamic>? value) {
+    _$lastErrorAtom.reportWrite(value, super.lastError, () {
+      super.lastError = value;
+    });
+  }
+
   late final _$lastSuccessAtom =
       Atom(name: '_FinalizacaoStoreBase.lastSuccess', context: context);
 
@@ -85,6 +101,7 @@ mixin _$FinalizacaoStore on _FinalizacaoStoreBase, Store {
     return '''
 status: ${status},
 errorMessage: ${errorMessage},
+lastError: ${lastError},
 lastSuccess: ${lastSuccess}
     ''';
   }

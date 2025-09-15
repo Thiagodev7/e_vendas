@@ -4,33 +4,57 @@ import 'package:e_vendas/app/core/config/api_client.dart';
 class PaymentService {
   final Dio _dio = ApiClient().dio;
 
-  Future<PixChargeResult> gerarPix({required Map<String, dynamic> payload}) async {
-    final res = await _dio.post('/celcoin/generatePix', data: payload);
-    final charge = Map<String, dynamic>.from(res.data['Charge'] ?? {});
+Future<PixChargeResult> gerarPix({required Map<String, dynamic> payload}) async {
+  final res = await _dio.post('/celcoin/generatePix', data: payload);
+  final charge = Map<String, dynamic>.from(res.data['Charge'] ?? {});
+  print('Charge: $charge');
 
-    final myId = charge['myId']?.toString() ?? '';
+  final myId = charge['myId']?.toString() ?? '';
+  final link = (charge['paymentLink'] ?? charge['PaymentLink'])?.toString();
 
-    final pmPix  = Map<String, dynamic>.from(charge['PaymentMethodPix'] ?? charge['PaymentMethod'] ?? {});
-    final qr     = Map<String, dynamic>.from(pmPix['QrCode'] ?? {});
-    final emv    = (qr['emv'] ?? qr['Emv'] ?? qr['payload'])?.toString();
-    final img    = (qr['image'] ?? qr['ImageBase64'])?.toString();
+  final txs = (charge['Transactions'] is List) ? List.from(charge['Transactions']) : const [];
+  final dynamic gTop = charge['galaxPayId'];
+  final dynamic gTx  = txs.isNotEmpty ? txs.first['galaxPayId'] : null;
+  final int? galaxId = _asInt(gTop) ?? _asInt(gTx);
 
-    final link   = charge['paymentLink']?.toString();
+  // PaymentMethodPix (alguns formatos)
+  final pmPix  = Map<String, dynamic>.from(charge['PaymentMethodPix'] ?? charge['PaymentMethod'] ?? {});
+  final qrBlk  = Map<String, dynamic>.from(pmPix['QrCode'] ?? {});
+  String? emv  = (qrBlk['emv'] ?? qrBlk['Emv'] ?? qrBlk['payload'])?.toString();
+  String? img  = (qrBlk['image'] ?? qrBlk['ImageBase64'])?.toString();
 
-    final txs = (charge['Transactions'] is List) ? List.from(charge['Transactions']) : const [];
-    final dynamic gTop = charge['galaxPayId'];
-    final dynamic gTx  = txs.isNotEmpty ? txs.first['galaxPayId'] : null;
-    final int? galaxId = _asInt(gTop) ?? _asInt(gTx);
-
-    return PixChargeResult(
-      myId: myId,
-      galaxPayId: galaxId,
-      emv: emv,
-      imageBase64: img,
-      link: link,
-      rawCharge: charge,
-    );
+  // Transactions[0].Pix (se não veio no bloco anterior)
+  if ((emv == null || emv.isEmpty) && txs.isNotEmpty) {
+    final t0  = Map<String, dynamic>.from(txs.first);
+    final pix = Map<String, dynamic>.from(t0['Pix'] ?? {});
+    emv ??= (pix['qrCode'] ?? pix['emv'] ?? pix['payload'])?.toString();
+    img ??= (pix['image'] ?? pix['ImageBase64'])?.toString();
   }
+
+  // Decide para onde vai a imagem
+  String? imageUrl;
+  String? imageBase64;
+  if (img != null && img.isNotEmpty) {
+    if (img.startsWith('http')) {
+      imageUrl = img;
+    } else {
+      imageBase64 = img;
+    }
+  }
+
+  return PixChargeResult(
+    myId: myId,
+    galaxPayId: galaxId,
+    emv: emv,
+    imageBase64: imageBase64,
+    imageUrl: imageUrl,
+    link: link,
+    rawCharge: charge,
+  );
+}
+
+
+
 
   Future<CardLinkResult> gerarCartao({required Map<String, dynamic> payload}) async {
     final res = await _dio.post('/celcoin/generateOneOffChargeLink', data: payload);
@@ -85,15 +109,18 @@ class PixChargeResult {
   final String myId;
   final int? galaxPayId;
   final String? emv;
-  final String? imageBase64;
+  final String? imageBase64; // quando vier base64
+  final String? imageUrl;    // quando vier URL
   final String? link;
   final Map<String, dynamic> rawCharge;
-  PixChargeResult({
+
+  const PixChargeResult({
     required this.myId,
     required this.galaxPayId,
-    this.emv,
+    required this.emv,
     this.imageBase64,
-    this.link,
+    this.imageUrl,
+    required this.link,
     required this.rawCharge,
   });
 }

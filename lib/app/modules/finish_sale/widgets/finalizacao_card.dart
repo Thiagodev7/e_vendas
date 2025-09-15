@@ -66,8 +66,12 @@ class _FinalizacaoCardState extends State<FinalizacaoCard> {
         // extrai lista_erros do payload (quando houver)
         final listaErros = (() {
           final le = _finalizacaoStore.lastError;
-          if (le is Map && le?['erro'] is Map && le?['erro']['lista_erros'] is List) {
-            return List<Map<String, dynamic>>.from(le?['erro']['lista_erros'] as List);
+          if (le is Map &&
+              le?['erro'] is Map &&
+              (le?['erro']['lista_erros'] is List)) {
+            return List<Map<String, dynamic>>.from(
+              le?['erro']['lista_erros'] as List,
+            );
           }
           return const <Map<String, dynamic>>[];
         })();
@@ -96,13 +100,13 @@ class _FinalizacaoCardState extends State<FinalizacaoCard> {
             const SizedBox(height: 12),
 
             // Feedbacks
-            if (erro && (_finalizacaoStore.errorMessage?.isNotEmpty ?? false)) ...[
-              _InfoBanner.error(_finalizacaoStore.errorMessage!),
-              const SizedBox(height: 8),
-
-              if (listaErros.isNotEmpty)
-                _DatasysErrorDetails(listaErros: listaErros),
-            ],
+            if (erro && (_finalizacaoStore.errorMessage?.isNotEmpty ?? false))
+              ...[
+                _InfoBanner.error(_finalizacaoStore.errorMessage!),
+                const SizedBox(height: 8),
+                if (listaErros.isNotEmpty)
+                  _DatasysErrorDetails(listaErros: listaErros),
+              ],
 
             if (sucesso) ...[
               _InfoBanner.success(
@@ -110,10 +114,6 @@ class _FinalizacaoCardState extends State<FinalizacaoCard> {
                     'Enviado ao Datasys com sucesso.',
               ),
               const SizedBox(height: 8),
-              if ((_finalizacaoStore.lastSuccess?['retorno_datasys']) != null)
-                _SuccessDetails(
-                  ret: _finalizacaoStore.lastSuccess!['retorno_datasys'],
-                ),
             ],
 
             // Botões
@@ -160,11 +160,159 @@ class _FinalizacaoCardState extends State<FinalizacaoCard> {
 
     if (ok) {
       _toast('Venda finalizada enviada ao Datasys.');
+      // Abre o pop-up bonito com carteirinha e ação de voltar à home
+      final data = _finalizacaoStore.lastSuccess ?? <String, dynamic>{};
+      // aguarda fechar o diálogo antes de prosseguir
+      await _showSuccessDialog(context, data);
     } else {
       _toast(_finalizacaoStore.errorMessage ?? 'Falha ao finalizar.');
       _cpfFocus.requestFocus();
     }
   }
+
+  // ============== POPUP DE SUCESSO =================
+
+  Future<void> _showSuccessDialog(
+      BuildContext context, Map<String, dynamic> data) async {
+    final cs = Theme.of(context).colorScheme;
+    final nro = _extractNroProposta(data) ?? _saleStore.nroProposta;
+    final carteirinha = _extractCarteirinha(data);
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (ctx) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header com ícone
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: cs.primaryContainer,
+                    child: Icon(Icons.check_rounded,
+                        color: cs.onPrimaryContainer, size: 34),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Venda concluída!',
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    data['message']?.toString() ??
+                        'Enviado ao Datasys com sucesso.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Chips informativos
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      if (nro != null)
+                        _chip(
+                          context,
+                          icon: Icons.tag_rounded,
+                          label: 'Proposta #$nro',
+                        ),
+                      if (data['faturamento'] is Map &&
+                          (data['faturamento']['executado'] == true))
+                        _chip(
+                          context,
+                          icon: Icons.receipt_long_rounded,
+                          label: 'Faturamento emitido',
+                          color: cs.secondaryContainer,
+                          fg: cs.onSecondaryContainer,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Carteirinha destacada (quando houver)
+                  if (carteirinha != null && carteirinha.isNotEmpty) ...[
+                    _CarteirinhaCard(
+                      cardNumber: carteirinha,
+                      onCopy: () async {
+                        await Clipboard.setData(
+                            ClipboardData(text: carteirinha));
+                        _toast('Carteirinha copiada!');
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
+                  // Detalhes (expansível)
+                  _SuccessDetailsInline(data: data),
+
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      // Expanded(
+                      //   child: OutlinedButton.icon(
+                      //     onPressed: () {
+                      //       Navigator.of(ctx, rootNavigator: true).pop();
+                      //     },
+                      //     icon: const Icon(Icons.close),
+                      //     label: const Text('Fechar'),
+                      //   ),
+                      // ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            // navega para a Home; ajuste a rota se necessário
+                            Modular.to.navigate('/home');
+                          },
+                          icon: const Icon(Icons.home_rounded),
+                          label: const Text('Voltar para a Home'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  int? _extractNroProposta(Map<String, dynamic> data) {
+    final raw = data['nro_proposta'] ?? data['nroProposta'];
+    if (raw is int) return raw;
+    return int.tryParse(raw?.toString() ?? '');
+    // se não achar, volta null -> UI já trata
+  }
+
+  String? _extractCarteirinha(Map<String, dynamic> data) {
+    try {
+      final pessoa = (data['pessoa_composicao'] ?? {}) as Map;
+      final ret = (pessoa['retorno'] ?? {}) as Map;
+      final titular = (ret['titular'] ?? {}) as Map;
+      final card = titular['carteirinha']?.toString();
+      if (card != null && card.trim().isNotEmpty) return card.trim();
+    } catch (_) {}
+    return null;
+  }
+
+  // ================= UI helpers =================
 
   void _toast(String msg) {
     final messenger = ScaffoldMessenger.maybeOf(context);
@@ -220,35 +368,6 @@ class _InfoBanner extends StatelessWidget {
   }
 }
 
-class _SuccessDetails extends StatelessWidget {
-  const _SuccessDetails({required this.ret});
-  final dynamic ret;
-
-  @override
-  Widget build(BuildContext context) {
-    final pretty = const JsonEncoder.withIndent('  ').convert(ret);
-    return ExpansionTile(
-      title: const Text('Detalhes do retorno do Datasys'),
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceVariant,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: SelectableText(
-            pretty,
-            style: const TextStyle(fontFamily: 'monospace'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Mostra a lista de erros específicos retornados pelo Datasys:
-/// cada item pode conter { msg, registro, id_origem }
 class _DatasysErrorDetails extends StatelessWidget {
   const _DatasysErrorDetails({required this.listaErros});
   final List<Map<String, dynamic>> listaErros;
@@ -299,4 +418,123 @@ class _DatasysErrorDetails extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SuccessDetailsInline extends StatelessWidget {
+  const _SuccessDetailsInline({required this.data});
+  final Map<String, dynamic> data;
+
+  @override
+  Widget build(BuildContext context) {
+    // Mostra um bloco “Ver detalhes” com o JSON completo de sucesso
+    final pretty = const JsonEncoder.withIndent('  ').convert(data);
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: EdgeInsets.zero,
+      title: const Text('Ver detalhes'),
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceVariant,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: SelectableText(
+            pretty,
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CarteirinhaCard extends StatelessWidget {
+  const _CarteirinhaCard({
+    required this.cardNumber,
+    required this.onCopy,
+  });
+
+  final String cardNumber;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.secondaryContainer.withOpacity(.45),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.badge_rounded, color: cs.onSecondaryContainer),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Carteirinha',
+                    style: TextStyle(
+                        color: cs.onSecondaryContainer.withOpacity(.9),
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                SelectableText(
+                  cardNumber,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 16,
+                    letterSpacing: 0.5,
+                    color: cs.onSecondaryContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: onCopy,
+            icon: const Icon(Icons.copy_rounded, size: 18),
+            label: const Text('Copiar'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// pequeno helper visual (chip)
+Widget _chip(
+  BuildContext context, {
+  required IconData icon,
+  required String label,
+  Color? color,
+  Color? fg,
+}) {
+  final cs = Theme.of(context).colorScheme;
+  final bg = color ?? cs.surface;
+  final txt = fg ?? cs.onSurfaceVariant;
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: bg,
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: cs.outlineVariant),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: txt),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: txt),
+        ),
+      ],
+    ),
+  );
 }

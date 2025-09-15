@@ -149,7 +149,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               const SizedBox(height: 20),
                               Center(
                                 child: Text(
-                                  'Bem-vindo ao e-Vendas',
+                                  'Bem-vindo ao Portal de Vendas',
                                   style: TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.bold,

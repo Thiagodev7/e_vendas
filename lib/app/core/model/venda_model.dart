@@ -22,6 +22,9 @@ class VendaModel {
   final bool contratoAssinado;
   final bool vendaFinalizada;
 
+  /// Valor da venda (mensalidade total). Preenchido localmente ou vindo do back.
+  final double? valorVenda;
+
   /// Origem (local x nuvem)
   final VendaOrigin origin;
 
@@ -37,6 +40,7 @@ class VendaModel {
     this.pagamentoConcluido = false,
     this.contratoAssinado = false,
     this.vendaFinalizada = false,
+    this.valorVenda,
   });
 
   /// Vidas = dependentes + 1 (titular)
@@ -54,6 +58,7 @@ class VendaModel {
     bool? pagamentoConcluido,
     bool? contratoAssinado,
     bool? vendaFinalizada,
+    double? valorVenda,
   }) {
     return VendaModel(
       pessoaTitular: pessoaTitular ?? this.pessoaTitular,
@@ -68,6 +73,7 @@ class VendaModel {
       pagamentoConcluido: pagamentoConcluido ?? this.pagamentoConcluido,
       contratoAssinado: contratoAssinado ?? this.contratoAssinado,
       vendaFinalizada: vendaFinalizada ?? this.vendaFinalizada,
+      valorVenda: valorVenda ?? this.valorVenda,
     );
   }
 
@@ -86,12 +92,19 @@ class VendaModel {
       'pagamentoConcluido': pagamentoConcluido,
       'contratoAssinado': contratoAssinado,
       'vendaFinalizada': vendaFinalizada,
+      'valorVenda': valorVenda,
     };
   }
 
   factory VendaModel.fromLocalJson(Map<String, dynamic> json) {
     final nro = json['nroProposta'];
     final int? nroProp = nro is int ? nro : int.tryParse(nro?.toString() ?? '');
+
+    double? _toDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
 
     return VendaModel(
       pessoaTitular: json['pessoaTitular'] != null
@@ -118,11 +131,18 @@ class VendaModel {
       pagamentoConcluido: _asBool(json['pagamentoConcluido']),
       contratoAssinado: _asBool(json['contratoAssinado']),
       vendaFinalizada: _asBool(json['vendaFinalizada']),
+      valorVenda: _toDouble(json['valorVenda']),
     );
   }
 
   /// Constrói a venda vinda do backend (propostas abertas)
   factory VendaModel.fromProposalJson(Map<String, dynamic> json) {
+    double? _toDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
+
     final dependentesList = (json['dependentes'] as List<dynamic>?)
         ?.map((depJson) => PessoaModel.fromJson(depJson as Map<String, dynamic>))
         .toList();
@@ -165,6 +185,9 @@ class VendaModel {
       vendaFinalizada: _asBool(
         json['venda_finalizada'] ?? json['vendaFinalizada'],
       ),
+
+      // se o back retornar, guardamos (numeric/number/string)
+      valorVenda: _toDouble(json['valor_venda'] ?? json['valorVenda']),
     );
 
     final vidas = parcial.vidasSelecionadas;

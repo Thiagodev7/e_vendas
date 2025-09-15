@@ -13,7 +13,7 @@ class AppWidget extends StatelessWidget {
 
     return Observer(
       builder: (_) => MaterialApp.router(
-        title: 'e-Vendas',
+        title: 'Portal de Vendas',
         debugShowCheckedModeBanner: false,
         theme: themeStore.isDark ? AppTheme.darkTheme : AppTheme.lightTheme,
         routeInformationParser: Modular.routeInformationParser,

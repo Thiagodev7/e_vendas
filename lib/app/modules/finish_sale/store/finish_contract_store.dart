@@ -8,10 +8,6 @@ import 'package:e_vendas/app/modules/finish_sale/service/contract_service.dart';
 
 part 'finish_contract_store.g.dart';
 
-/// Store do fluxo de contrato (DocuSign) + flags de status no servidor.
-/// - Dispara envelope
-/// - Consulta /contracts/:nroProposta/status
-/// - Finaliza a venda quando tudo ok
 class FinishContractStore = _FinishContractStoreBase with _$FinishContractStore;
 
 abstract class _FinishContractStoreBase with Store {
@@ -27,31 +23,24 @@ abstract class _FinishContractStoreBase with Store {
   final SalesService _sales;
   final int _defaultVendedorId;
 
-  // ===========
-  // Bindings
-  // ===========
   @observable
   VendaModel? venda;
 
   @observable
   int? nroProposta;
 
-  // ===========
-  // Estado
-  // ===========
   @observable
-  bool loading = false;      // ações longas (gerar contrato / finalizar)
+  bool loading = false;
 
   @observable
-  bool checking = false;     // checando flags no backend
+  bool checking = false;
 
   @observable
-  DateTime? lastCheckedAt;   // última checagem
+  DateTime? lastCheckedAt;
 
   @observable
   bool contratoGerado = false;
 
-  /// Flags do servidor
   @observable
   bool pagamentoConcluidoServer = false;
 
@@ -62,55 +51,40 @@ abstract class _FinishContractStoreBase with Store {
   bool vendaFinalizadaServer = false;
 
   @observable
-  String? contratoEnvelopeId; // futuro
+  String? contratoEnvelopeId;
 
   @observable
-  String? contratoUrl;        // futuro
+  String? contratoUrl;
 
-  // ===========
-  // Getters
-  // ===========
-  /// Evita reenvio se já assinado no servidor.
   @computed
   bool get podeDispararContrato => !loading && !contratoAssinadoServer;
 
-  // ===========
-  // Binds
-  // ===========
   @action
   void bindVenda(VendaModel v) => venda = v;
 
+  /// aceita qualquer tipo e tenta converter para int
   @action
-  void bindNroProposta(int? nro) => nroProposta = nro;
+  void bindNroProposta(dynamic nro) => nroProposta = _coerceInt(nro);
 
-  // ===========
-  // Ações
-  // ===========
-  /// Consulta flags no servidor e atualiza estado local.
   @action
   Future<ContractFlags?> syncFlags() async {
-    final nro = nroProposta;
-    if (nro == null) return null;
+    final id = nroProposta;
+    if (id == null) return null;
 
     checking = true;
     try {
-      final flags = await _contract.buscarStatusContrato(nro);
-
+      final flags = await _contract.buscarStatusContrato(id);
       pagamentoConcluidoServer = flags.pagamentoConcluido;
       contratoAssinadoServer   = flags.contratoAssinado;
       vendaFinalizadaServer    = flags.vendaFinalizada;
       lastCheckedAt            = DateTime.now();
-
       return flags;
-    } catch (_) {
-      return null; // silencioso p/ UI
     } finally {
       checking = false;
     }
   }
 
   /// Dispara o DocuSign via backend (`POST /contracts/send`).
-  /// `enrollmentFmt` e `monthlyFmt` devem vir formatados ("R$ 43,20").
   @action
   Future<void> gerarContrato({
     required String enrollmentFmt,
@@ -119,34 +93,33 @@ abstract class _FinishContractStoreBase with Store {
     final v = venda;
     if (v == null) throw Exception('Venda não carregada.');
 
-    // Garante nro_proposta
+    // Garante nro_proposta válido
     if (nroProposta == null) {
-      final nro = await _sales.criarProposta(v, vendedorId: _defaultVendedorId);
-      nroProposta = nro;
+      final nroRaw = await _sales.criarProposta(v, vendedorId: _defaultVendedorId);
+      final parsed = _coerceInt(nroRaw);
+      if (parsed == null) {
+        throw Exception('Retorno inválido ao criar proposta: $nroRaw');
+      }
+      nroProposta = parsed;
     }
 
     if (contratoAssinadoServer) {
       throw Exception('Contrato já assinado. Não é possível reenviar.');
     }
 
-    // Dados do titular
     final titular = v.pessoaTitular;
-    if (titular == null) throw Exception('Titular ausente.');
-    final nome = (titular.nome ?? '').trim();
-    final cpf = _digits(titular.cpf ?? '');
-    if (cpf.isEmpty) throw Exception('CPF do titular é obrigatório.');
-
-    final email = _pickEmail(v.contatos ?? const []);
-    final phone = _pickPhone(v.contatos ?? const []);
-    if (email == null) throw Exception('E-mail do titular é obrigatório.');
-    if (phone == null) throw Exception('Telefone do titular é obrigatório.');
-
     final end = v.endereco;
-    final address = [
-      end?.logradouro,
-      end?.numero?.toString(),
-      end?.bairro,
-    ].where((s) => (s ?? '').toString().trim().isNotEmpty).join(', ');
+
+    final nome = (titular?.nome ?? '').trim();
+
+    // e-mail e telefone vindos de ContatoModel
+    final email = _pickEmail(v.contatos ?? const <ContatoModel>[]) ?? '';
+    if (email.isEmpty) throw Exception('E-mail do titular é obrigatório.');
+    final phone = _pickPhone(v.contatos ?? const <ContatoModel>[]) ?? '';
+    if (phone.isEmpty) throw Exception('Telefone do titular é obrigatório.');
+
+    final cpf = _digits(titular?.cpf ?? '');
+    final address = '${end?.logradouro ?? ''}, ${end?.numero ?? ''} ${end?.complemento ?? ''}'.trim();
     final city = (end?.nomeCidade ?? '').trim();
     final uf = (end?.siglaUf ?? '').toString().trim();
     final cep = _digits(end?.cep ?? '');
@@ -155,13 +128,13 @@ abstract class _FinishContractStoreBase with Store {
     final deps = (v.dependentes ?? []).length;
 
     final body = <String, dynamic>{
-      'nroProposta': nroProposta, // usado pelo webhook/status
+      'nroProposta': nroProposta, // já garantido int
       'email': email,
       'name': nome.isEmpty ? 'Cliente' : nome,
       'cpf': cpf,
       'phone': phone,
-      'birth': titular.dataNascimento ?? '',
-      'sex': titular.idSexo?.toString() ?? '',
+      'birth': titular?.dataNascimento ?? '',
+      'sex': titular?.idSexo?.toString() ?? '',
       'address': address,
       'city': city,
       'uf': uf,
@@ -174,41 +147,52 @@ abstract class _FinishContractStoreBase with Store {
 
     loading = true;
     try {
-      await _contract.enviarContratoDocuSign(body: body);
-      contratoGerado = true; // assinatura confirmará via webhook/status
+      final envId = await _contract.enviarContratoDocuSign(body: body);
+      contratoEnvelopeId = envId;
+      contratoGerado = true;
     } finally {
       loading = false;
     }
   }
 
-  /// Finaliza a venda no backend quando pagamento/contrato estiverem ok.
   @action
-  Future<void> finalizarVenda() async {
-    final nro = nroProposta;
-    if (nro == null) throw Exception('nroProposta ausente.');
-
-    loading = true;
+  Future<DocusignStatus?> conferirAssinaturaDocuSign() async {
+    final id = contratoEnvelopeId;
+    if (id == null || id.isEmpty) return null;
+    checking = true;
     try {
-      await _sales.atualizarStatusProposta(
-        nroProposta: nro,
-        vendaFinalizada: true,
-        pagamentoConcluido: true, // seguro/idempotente
-        // contratoAssinado: true  // marque via webhook quando assinado
-      );
-      vendaFinalizadaServer = true;
+      final ds = await _contract.buscarStatusDocuSign(id);
+      if (ds.signed) contratoAssinadoServer = true;
+      lastCheckedAt = DateTime.now();
+      return ds;
     } finally {
-      loading = false;
+      checking = false;
     }
   }
 
-  // ===========
-  // Helpers
-  // ===========
-  String _digits(String v) => v.replaceAll(RegExp(r'\D'), '');
+  // ===== Helpers =====
+  int? _coerceInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v.trim());
+    if (v is Map) {
+      return _coerceInt(
+        v['nroProposta'] ?? v['nro_proposta'] ?? v['propostaId'] ?? v['id'],
+      );
+    }
+    return null;
+  }
+
+  String _digits(String? s) => (s ?? '').replaceAll(RegExp(r'\D'), '');
 
   String? _pickEmail(List<ContatoModel> contatos) {
     for (final c in contatos) {
       final s = c.descricao.trim();
+      if (s.contains('@')) return s;
+    }
+    for (final c in contatos) {
+      final s = (c.contato ?? '').trim();
       if (s.contains('@')) return s;
     }
     return null;
@@ -217,6 +201,10 @@ abstract class _FinishContractStoreBase with Store {
   String? _pickPhone(List<ContatoModel> contatos) {
     for (final c in contatos) {
       final digits = _digits(c.descricao);
+      if (digits.length >= 10) return digits;
+    }
+    for (final c in contatos) {
+      final digits = _digits(c.contato ?? '');
       if (digits.length >= 10) return digits;
     }
     return null;
