@@ -1,3 +1,5 @@
+import 'package:e_vendas/app/modules/finish_sale/store/finish_sale_store.dart';
+import 'package:e_vendas/app/modules/finish_sale/widgets/billing_calculator.dart';
 import 'package:mobx/mobx.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
@@ -21,6 +23,7 @@ abstract class _FinalizacaoStoreBase with Store {
   final FinishPaymentStore _paymentStore = Modular.get<FinishPaymentStore>();
   final FinishContractStore _contractStore = Modular.get<FinishContractStore>();
   final GlobalStore _globalStore = Modular.get<GlobalStore>();
+  final FinishSaleStore _saleStore = Modular.get<FinishSaleStore>(); 
 
   // ======= STATE =======
   @observable
@@ -77,21 +80,35 @@ abstract class _FinalizacaoStoreBase with Store {
       return false;
     }
 
-    // 4) Chamada
-    status = FinalizacaoStatus.loading;
-    errorMessage = null;
-    lastError = null;
-    lastSuccess = null;
+    // ===== calcula faturamento (centavos) a partir da venda atual =====
+    Map<String, dynamic>? faturamento;
+    final v = _saleStore.venda;
+    if (v != null && v.plano != null) {
+      final vidas = ((v.dependentes?.length ?? 0) + 1);
+      final planSync = v.plano!.copyWith(vidasSelecionadas: vidas);
+      final b = computeBilling(planSync);
 
+      faturamento = {
+        'vidas': vidas,
+        'is_anual': b.kind == BillingKind.anual,
+        'num_meses': (b.kind == BillingKind.anual) ? 12 : 1,
+        'due_day': b.dueDay,
+        'mensal_centavos': (b.mensal * 100).round(),
+        'adesao_centavos': (b.adesao * 100).round(),
+        'prorata_centavos': (b.prorata * 100).round(),
+        'total_primeira_centavos': b.valorAgoraCentavos, // ESTE é o que cobra agora
+      };
+    }
+
+    status = FinalizacaoStatus.loading;
     try {
       final res = await _service.enviarPessoaComposicao(
         nroProposta: nroProposta,
         cpfVendedor: cpfDigits,
+        faturamento: faturamento, // ⬅️ manda pro backend
       );
-
       status = FinalizacaoStatus.success;
       lastSuccess = res;
-      lastError = null;
       return true;
     } on DatanextHttpException catch (e) {
       status = FinalizacaoStatus.error;

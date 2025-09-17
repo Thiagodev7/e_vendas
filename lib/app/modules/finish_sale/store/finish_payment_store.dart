@@ -67,7 +67,19 @@ abstract class _FinishPaymentStoreBase with Store {
 
   // ===== Binds =====
   @action
-  void bindVenda(VendaModel v) => venda = v;
+void bindVenda(VendaModel v) {
+  venda = v;
+
+  // Se já veio myId salvo no back, usa para permitir "Atualizar status"
+  final ref = v.gatewayPagamentoId; // agora é o myId
+  if ((ref != null && ref.isNotEmpty) && (cardMyId == null || cardMyId!.isEmpty)) {
+    cardMyId = ref;
+  }
+
+  if (!pagamentoConcluidoServer && v.pagamentoConcluido != true && canCheckStatus) {
+    paymentStatus = PaymentStatus.aguardando;
+  }
+}
 
   @action
   void bindNroProposta(int? nro) => nroProposta = nro;
@@ -86,6 +98,15 @@ abstract class _FinishPaymentStoreBase with Store {
   @computed
   String? get currentMyId => (metodo == PayMethod.card) ? cardMyId : pixMyId;
 
+  @computed
+bool get canCheckStatus {
+  final hasMyId = (cardMyId != null && cardMyId!.isNotEmpty) ||
+                  (pixMyId  != null && pixMyId!.isNotEmpty) ||
+                  ((venda?.gatewayPagamentoId ?? '').isNotEmpty);
+  final hasLegacyNum = galaxPayId != null; // fallback antigo, se sobrar algo local
+  return hasMyId || hasLegacyNum;
+}
+
   /// Valor que DEVE ser cobrado AGORA (centavos) — mesmo cálculo do resumo.
   @computed
   int get valorCelcoinCentavos {
@@ -103,6 +124,8 @@ abstract class _FinishPaymentStoreBase with Store {
     final val = cents / 100.0;
     return 'R\$ ${val.toStringAsFixed(2).replaceAll('.', ',')}';
   }
+
+  
 
   // ===== Ações: gerar cobranças =====
   @action
@@ -150,35 +173,43 @@ abstract class _FinishPaymentStoreBase with Store {
   }
 
   @action
-  Future<PaymentStatus> consultarStatusPagamento() async {
-    if (galaxPayId == null && cardMyId == null && pixMyId == null) {
-      throw Exception('Nenhuma cobrança gerada.');
-    }
-    loading = true;
-    try {
-      final res = await _payment.consultarStatus(
-        galaxPayId: galaxPayId,
-        myId: cardMyId ?? pixMyId,
-      );
-      final status = _mapStatus(res);
-      paymentStatus = status;
+Future<PaymentStatus> consultarStatusPagamento() async {
+  // Prioriza myId: local (card/pix) -> vindo da proposta (gatewayPagamentoId)
+  final String? myIdEffective =
+      (cardMyId ?? pixMyId) ?? venda?.gatewayPagamentoId;
 
-      if (status == PaymentStatus.pago && nroProposta != null) {
-        try {
-          await _sales.atualizarStatusProposta(
-            nroProposta: nroProposta!,
-            pagamentoConcluido: true,
-          );
-          pagamentoConcluidoServer = true;
-        } catch (_) {
-          // não interrompe se falhar
-        }
-      }
-      return status;
-    } finally {
-      loading = false;
-    }
+  // Suporte legado: galaxPayId numérico gerado nesta sessão
+  final int? galaxIdEffective = galaxPayId;
+
+  if (galaxIdEffective == null && (myIdEffective == null || myIdEffective.isEmpty)) {
+    throw Exception('Nenhuma cobrança gerada.');
   }
+
+  loading = true;
+  try {
+    final res = await _payment.consultarStatus(
+      galaxPayId: galaxIdEffective,
+      myId: myIdEffective,
+    );
+    final status = _mapStatus(res);
+    paymentStatus = status;
+
+    if (status == PaymentStatus.pago && nroProposta != null) {
+      try {
+        await _sales.atualizarStatusProposta(
+          nroProposta: nroProposta!,
+          pagamentoConcluido: true,
+        );
+        pagamentoConcluidoServer = true;
+      } catch (_) {
+        // não interrompe se falhar
+      }
+    }
+    return status;
+  } finally {
+    loading = false;
+  }
+}
 
   // ===== Helpers internos =====
   Map<String, dynamic> _buildPaymentPayload() {
@@ -212,23 +243,23 @@ abstract class _FinishPaymentStoreBase with Store {
     final monthlyCents = (b.mensal * 100).round();
     final enrollmentCents = (b.adesao * 100).round();
 
-    final Map<String, dynamic> payload = {
-      'username': 'somosuni',
-      'customer': {
-        'name': titular.nome ?? '',
-        'cpf': _digits(titular.cpf ?? ''),
-        'email': email,
-        'cep': _digits(end.cep ?? ''),
-        'phone': phone,
-      },
-      'plan': v.plano?.nomeContrato ?? 'Plano',
-      'enrollment': enrollmentCents,
-      'monthly': monthlyCents,
-      'value': valueCents, // << valor cobrado AGORA (centavos)
-      'numMonths':
-          numMonths, // 12 se anual, 1 se mensal (para backend limitar parcelas)
-      'numLives': vidas,
-    };
+      final Map<String, dynamic> payload = {
+    'username': 'somosuni',
+    'customer': {
+      'name': titular.nome ?? '',
+      'cpf': _digits(titular.cpf ?? ''),
+      'email': email,
+      'cep': _digits(end.cep ?? ''),
+      'phone': phone,
+    },
+    'plan': v.plano?.nomeContrato ?? 'Plano',
+    'enrollment': enrollmentCents,
+    'monthly': monthlyCents,
+    'value': valueCents,               // valor cobrado AGORA (centavos)
+    'numMonths': numMonths,            // 12 se anual, 1 se mensal
+    'numLives': vidas,
+    if (nroProposta != null) 'nro_proposta': nroProposta, // <<< ADICIONE ISTO
+  };
 
     final deps = (v.dependentes ?? [])
         .where((d) => (d.cpf?.isNotEmpty ?? false))

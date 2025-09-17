@@ -16,25 +16,24 @@ class DatanextService {
   Future<Map<String, dynamic>> enviarPessoaComposicao({
     required int nroProposta,
     required String cpfVendedor,
+    Map<String, dynamic>? faturamento, // ⬅️ novo (opcional)
   }) async {
     try {
       final body = {
         'nro_proposta': nroProposta,
         'cpf_vendedor': cpfVendedor,
+        if (faturamento != null) 'faturamento': faturamento, // ⬅️ envia se vier
       };
 
       final res = await _dio.post<Map<String, dynamic>>(
         _path,
         data: body,
         options: Options(
-          // content-type por segurança; o ApiClient já injeta Authorization: Bearer
           contentType: Headers.jsonContentType,
-          receiveTimeout: const Duration(seconds: 30),
-          sendTimeout: const Duration(seconds: 30),
+          receiveTimeout: Duration(seconds: 30),
+          sendTimeout: Duration(seconds: 30),
         ),
       );
-      print(res.data);
-
       return res.data ?? <String, dynamic>{};
     } on DioException catch (e) {
       print(e.response);

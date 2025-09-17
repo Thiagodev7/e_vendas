@@ -17,6 +17,9 @@ class VendaModel {
   /// Identificador da proposta na nuvem (quando origin == cloud)
   final int? nroProposta;
 
+  /// ID do gateway salvo no backend (agora guarda o myId como texto)
+  final String? gatewayPagamentoId;
+
   /// Sinalizadores da proposta (vêm do backend)
   final bool pagamentoConcluido;
   final bool contratoAssinado;
@@ -36,6 +39,7 @@ class VendaModel {
     this.contatos,
     this.plano,
     this.nroProposta,
+    this.gatewayPagamentoId,
     this.origin = VendaOrigin.local,
     this.pagamentoConcluido = false,
     this.contratoAssinado = false,
@@ -55,6 +59,7 @@ class VendaModel {
     PlanModel? plano,
     int? nroProposta,
     VendaOrigin? origin,
+    String? gatewayPagamentoId, // << agora String?
     bool? pagamentoConcluido,
     bool? contratoAssinado,
     bool? vendaFinalizada,
@@ -70,6 +75,7 @@ class VendaModel {
       plano: plano ?? this.plano,
       nroProposta: nroProposta ?? this.nroProposta,
       origin: origin ?? this.origin,
+      gatewayPagamentoId: gatewayPagamentoId ?? this.gatewayPagamentoId,
       pagamentoConcluido: pagamentoConcluido ?? this.pagamentoConcluido,
       contratoAssinado: contratoAssinado ?? this.contratoAssinado,
       vendaFinalizada: vendaFinalizada ?? this.vendaFinalizada,
@@ -89,6 +95,7 @@ class VendaModel {
       'plano': plano?.toJson(),
       'nroProposta': nroProposta,
       'origin': origin.name,
+      'gatewayPagamentoId': gatewayPagamentoId, // String (myId)
       'pagamentoConcluido': pagamentoConcluido,
       'contratoAssinado': contratoAssinado,
       'vendaFinalizada': vendaFinalizada,
@@ -97,14 +104,27 @@ class VendaModel {
   }
 
   factory VendaModel.fromLocalJson(Map<String, dynamic> json) {
-    final nro = json['nroProposta'];
-    final int? nroProp = nro is int ? nro : int.tryParse(nro?.toString() ?? '');
+    int? _toInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return int.tryParse(v.toString());
+    }
 
     double? _toDouble(dynamic v) {
       if (v == null) return null;
       if (v is num) return v.toDouble();
       return double.tryParse(v.toString());
     }
+
+    String? _toStringOrNull(dynamic v) {
+      if (v == null) return null;
+      final s = v.toString().trim();
+      return s.isEmpty ? null : s;
+    }
+
+    final nro = json['nroProposta'];
+    final int? nroProp = (nro is int) ? nro : int.tryParse(nro?.toString() ?? '');
 
     return VendaModel(
       pessoaTitular: json['pessoaTitular'] != null
@@ -128,6 +148,7 @@ class VendaModel {
         'cloud' => VendaOrigin.cloud,
         _ => VendaOrigin.local,
       },
+      gatewayPagamentoId: _toStringOrNull(json['gatewayPagamentoId']),
       pagamentoConcluido: _asBool(json['pagamentoConcluido']),
       contratoAssinado: _asBool(json['contratoAssinado']),
       vendaFinalizada: _asBool(json['vendaFinalizada']),
@@ -143,6 +164,12 @@ class VendaModel {
       return double.tryParse(v.toString());
     }
 
+    String? _toStringOrNull(dynamic v) {
+      if (v == null) return null;
+      final s = v.toString().trim();
+      return s.isEmpty ? null : s;
+    }
+
     final dependentesList = (json['dependentes'] as List<dynamic>?)
         ?.map((depJson) => PessoaModel.fromJson(depJson as Map<String, dynamic>))
         .toList();
@@ -155,18 +182,26 @@ class VendaModel {
         ? PlanModel.fromMap(json['plano'] as Map<String, dynamic>)
         : null;
 
-    // pode vir string/number
+    // nro_proposta pode vir como string/number
     final rawNro = json['nro_proposta'] ?? json['nroProposta'];
-    final int? nroProp = rawNro is int ? rawNro : int.tryParse(rawNro?.toString() ?? '');
+    final int? nroProp =
+        (rawNro is int) ? rawNro : int.tryParse(rawNro?.toString() ?? '');
+
+    // gateway_pagamento_id: aceita snake_case ou camelCase; sempre convertemos para String
+    final String? gwId =
+        _toStringOrNull(json['gateway_pagamento_id'] ?? json['gatewayPagamentoId']);
+
+    // Suportar tanto "pessoaTitular" quanto "pessoatitular"
+    final titularJson =
+        (json['pessoaTitular'] ?? json['pessoatitular']) as Map<String, dynamic>?;
+    final respFinJson =
+        json['pessoaResponsavelFinanceiro'] as Map<String, dynamic>?;
 
     final parcial = VendaModel(
-      pessoaTitular: json['pessoatitular'] != null
-          ? PessoaModel.fromJson(json['pessoatitular'] as Map<String, dynamic>)
-          : null,
-      pessoaResponsavelFinanceiro: json['pessoaResponsavelFinanceiro'] != null
-          ? PessoaModel.fromJson(
-              json['pessoaResponsavelFinanceiro'] as Map<String, dynamic>)
-          : null,
+      pessoaTitular:
+          titularJson != null ? PessoaModel.fromJson(titularJson) : null,
+      pessoaResponsavelFinanceiro:
+          respFinJson != null ? PessoaModel.fromJson(respFinJson) : null,
       dependentes: dependentesList,
       endereco: json['endereco'] != null
           ? EnderecoModel.fromJson(json['endereco'] as Map<String, dynamic>)
@@ -174,22 +209,21 @@ class VendaModel {
       contatos: contatosList,
       nroProposta: nroProp,
       origin: VendaOrigin.cloud,
+      gatewayPagamentoId: gwId, // << String (myId)
 
-      // aceita snake_case e camelCase
-      pagamentoConcluido: _asBool(
-        json['pagamento_concluido'] ?? json['pagamentoConcluido'],
-      ),
-      contratoAssinado: _asBool(
-        json['contrato_assinado'] ?? json['contratoAssinado'],
-      ),
-      vendaFinalizada: _asBool(
-        json['venda_finalizada'] ?? json['vendaFinalizada'],
-      ),
+      // flags (snake/camel)
+      pagamentoConcluido:
+          _asBool(json['pagamento_concluido'] ?? json['pagamentoConcluido']),
+      contratoAssinado:
+          _asBool(json['contrato_assinado'] ?? json['contratoAssinado']),
+      vendaFinalizada:
+          _asBool(json['venda_finalizada'] ?? json['vendaFinalizada']),
 
-      // se o back retornar, guardamos (numeric/number/string)
+      // se o back retornar, guardamos
       valorVenda: _toDouble(json['valor_venda'] ?? json['valorVenda']),
     );
 
+    // Ajusta vidas no plano após saber quantos dependentes tem
     final vidas = parcial.vidasSelecionadas;
     final planSynced =
         planBase != null ? planBase.copyWith(vidasSelecionadas: vidas) : null;

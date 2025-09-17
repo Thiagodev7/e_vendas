@@ -28,8 +28,8 @@ class PagamentoCard extends StatelessWidget {
       if (uri == null) return;
       final ok = await launchUrl(uri);
       if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Não foi possível abrir o link.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Não foi possível abrir o link.')));
       }
     }
 
@@ -98,12 +98,16 @@ class PagamentoCard extends StatelessWidget {
             ChoiceChip(
               label: const Text('Cartão'),
               selected: store.metodo == PayMethod.card,
-              onSelected: locked ? null : (sel) => sel ? store.setMetodo(PayMethod.card) : null,
+              onSelected: locked
+                  ? null
+                  : (sel) => sel ? store.setMetodo(PayMethod.card) : null,
             ),
             ChoiceChip(
               label: const Text('PIX'),
               selected: store.metodo == PayMethod.pix,
-              onSelected: locked ? null : (sel) => sel ? store.setMetodo(PayMethod.pix) : null,
+              onSelected: locked
+                  ? null
+                  : (sel) => sel ? store.setMetodo(PayMethod.pix) : null,
             ),
           ],
         );
@@ -164,7 +168,8 @@ class PagamentoCard extends StatelessWidget {
                         try {
                           if (isCard) {
                             await store.gerarLinkCartao();
-                            _toast(context, 'Link de pagamento (Cartão) gerado!');
+                            _toast(
+                                context, 'Link de pagamento (Cartão) gerado!');
                           } else {
                             await store.gerarPix();
                             _toast(context, 'Cobrança PIX gerada!');
@@ -248,7 +253,8 @@ class PagamentoCard extends StatelessWidget {
                               );
                               return ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
-                                child: Image.memory(bytes, width: 220, height: 220),
+                                child: Image.memory(bytes,
+                                    width: 220, height: 220),
                               );
                             }
                             // Fallback local com EMV
@@ -281,12 +287,21 @@ class PagamentoCard extends StatelessWidget {
 
           // Status + Atualizar
           Observer(builder: (_) {
-            if (store.paymentStatus == PaymentStatus.none) {
-              return const SizedBox.shrink();
-            }
+            // Mostra a seção se já houver algo para consultar (gateway_pagamento_id ou myId)
+            final show = store.pagamentoConcluidoServer ||
+                store.canCheckStatus ||
+                store.paymentStatus != PaymentStatus.none;
+
+            if (!show) return const SizedBox.shrink();
+
+            // Se o back já marcou como pago, priorize o “Pago”
+            final effectiveStatus = store.pagamentoConcluidoServer
+                ? PaymentStatus.pago
+                : store.paymentStatus;
+
             late String label;
             late MaterialColor color;
-            switch (store.paymentStatus) {
+            switch (effectiveStatus) {
               case PaymentStatus.aguardando:
                 label = 'Aguardando pagamento';
                 color = Colors.orange;
@@ -296,9 +311,10 @@ class PagamentoCard extends StatelessWidget {
                 color = Colors.green;
                 break;
               default:
-                label = 'Erro';
-                color = Colors.red;
+                label = 'Sem status';
+                color = Colors.grey;
             }
+
             return Row(
               children: [
                 Chip(
