@@ -2,13 +2,13 @@ class EnvironmentConfig {
   // Defina o ambiente aqui: 'dev', 'prod', 'homolog'
   static const String _env = String.fromEnvironment(
     'ENV',
-    defaultValue: 'dev',
+    defaultValue: 'prod',
   );
 
   // URLs por ambiente
   static const Map<String, String> _urls = {
     'dev': 'http://localhost:3077',
-    'homolog': '192.168.0.93:3077',
+    'homolog': 'http://192.168.0.94:3077',
     'prod': 'https://beuniodontogyn.uniodontogoiania.com.br:3077',
   };
 

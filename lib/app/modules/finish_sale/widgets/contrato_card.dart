@@ -24,7 +24,6 @@ class ContratoCard extends StatelessWidget {
 
           final plan = paymentStore.venda?.plano;
 
-          // Aceita num OU string (resolve o erro de tipos)
           final dynamic monthlyRaw    = plan?.getMensalidade()    ?? plan?.getMensalidadeTotal();
           final dynamic enrollmentRaw = plan?.getTaxaAdesao()     ?? plan?.getTaxaAdesaoTotal();
 
@@ -72,14 +71,13 @@ class ContratoCard extends StatelessWidget {
                     ),
                   const SizedBox(width: 8),
 
-                  // Atualiza flags do servidor (por nroProposta)
+                  // Atualiza flags por nroProposta
                   OutlinedButton.icon(
                     onPressed: (contractStore.checking || contractStore.loading || contractStore.nroProposta == null)
                         ? null
                         : () async {
                             final flags = await contractStore.syncFlags();
                             if (flags != null) {
-                              // reflete pagamento na store de pagamento, se necessário
                               paymentStore.pagamentoConcluidoServer = flags.pagamentoConcluido;
                             }
                             final msg = (flags == null)
@@ -94,29 +92,95 @@ class ContratoCard extends StatelessWidget {
                         : const Icon(Icons.sync),
                     label: const Text('Atualizar status'),
                   ),
-                  const SizedBox(width: 8),
+                ],
+              ),
 
-                  // Conferir assinatura direto no DocuSign
+              const SizedBox(height: 12),
+
+              // ======= NOVA LINHA DE AÇÕES =========
+              Row(
+                children: [
+                  // Assinar agora (Recipient View)
                   OutlinedButton.icon(
-                    onPressed: (contractStore.checking || contractStore.loading || envelopeId == null)
+                    onPressed: (envelopeId == null || envelopeId.isEmpty || contractStore.loading)
                         ? null
                         : () async {
-                            final ds = await contractStore.conferirAssinaturaDocuSign();
-                            final msg = (ds == null)
-                                ? 'Não foi possível consultar agora.'
-                                : (ds.signed
-                                    ? 'Assinado no DocuSign.'
-                                    : 'Status DocuSign: ${ds.status}.');
-                            _toast(context, msg);
+                            try {
+                              final url = await contractStore.criarRecipientViewUrl(
+                                // opcional: passe uma returnUrl custom se quiser
+                                // returnUrl: 'https://seu-app.com/pos-assinatura'
+                              );
+                              if (url == null) {
+                                _toast(context, 'Não foi possível criar o link de assinatura.');
+                                return;
+                              }
+                              final uri = Uri.parse(url);
+                              if (await canLaunchUrl(uri)) {
+                                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                              } else {
+                                _toast(context, 'Falha ao abrir a URL de assinatura.');
+                              }
+                            } catch (e) {
+                              _toast(context, 'Erro ao abrir assinatura: $e');
+                            }
                           },
-                    icon: contractStore.checking
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.verified_outlined),
-                    label: const Text('Conferir assinatura (DocuSign)'),
+                    icon: const Icon(Icons.draw_rounded),
+                    label: const Text('Assinar agora (embutido)'),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Abrir Console DocuSign
+                  OutlinedButton.icon(
+                    onPressed: (envelopeId == null || envelopeId.isEmpty || contractStore.loading)
+                        ? null
+                        : () async {
+                            try {
+                              final url = await contractStore.criarConsoleViewUrl();
+                              if (url == null) {
+                                _toast(context, 'Não foi possível criar o Console View.');
+                                return;
+                              }
+                              final uri = Uri.parse(url);
+                              if (await canLaunchUrl(uri)) {
+                                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                              } else {
+                                _toast(context, 'Falha ao abrir o Console DocuSign.');
+                              }
+                            } catch (e) {
+                              _toast(context, 'Erro ao abrir console: $e');
+                            }
+                          },
+                    icon: const Icon(Icons.open_in_new_rounded),
+                    label: const Text('Abrir no DocuSign'),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Ver PDF
+                  OutlinedButton.icon(
+                    onPressed: (envelopeId == null || envelopeId.isEmpty)
+                        ? null
+                        : () async {
+                            final url = contractStore.getEnvelopePdfUrl();
+                            if (url == null) {
+                              _toast(context, 'URL do PDF indisponível.');
+                              return;
+                            }
+                            final uri = Uri.parse(url);
+                            if (await canLaunchUrl(uri)) {
+                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            } else {
+                              _toast(context, 'Falha ao abrir o PDF do envelope.');
+                            }
+                          },
+                    icon: const Icon(Icons.picture_as_pdf_rounded),
+                    label: const Text('Ver PDF'),
                   ),
                 ],
               ),
+
               const SizedBox(height: 12),
+
+              // ===== badges/infos =====
               Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: 12,
@@ -132,10 +196,11 @@ class ContratoCard extends StatelessWidget {
                   if (envelopeId != null)
                     InkWell(
                       onTap: () async {
-                        // Se tiver um viewer direto, troque a URL abaixo
-                        final url = Uri.parse('https://example.com/ds/envelope/$envelopeId');
-                        if (await canLaunchUrl(url)) {
-                          await launchUrl(url, mode: LaunchMode.externalApplication);
+                        final url = contractStore.getEnvelopePdfUrl();
+                        if (url == null) return;
+                        final uri = Uri.parse(url);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
                         }
                       },
                       child: Chip(

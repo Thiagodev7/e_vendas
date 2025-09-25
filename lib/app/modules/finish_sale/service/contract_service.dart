@@ -8,6 +8,14 @@ class ContractService {
   static String _statusPath(int nro) => '/contracts/$nro/status';
   static const String _dsStatusPath = '/contracts/docusign/status';
 
+  // NOVOS endpoints
+  static String _recipientViewPath(String envelopeId) =>
+      '/contracts/$envelopeId/recipient-view';
+  static String _consoleViewPath(String envelopeId) =>
+      '/contracts/$envelopeId/console-view';
+  static String _pdfPath(String envelopeId) =>
+      '/contracts/$envelopeId/pdf';
+
   Future<String?> enviarContratoDocuSign({ required Map<String, dynamic> body }) async {
     try {
       final res = await _dio.post(_sendPath, data: body);
@@ -33,8 +41,6 @@ class ContractService {
       throw Exception('nroProposta inválido no cliente: $nroProposta');
     }
     final path = _statusPath(nroProposta);
-    // debug opcional:
-    // print('GET $path');
     try {
       final res = await _dio.get(path);
       final data = res.data is Map<String, dynamic>
@@ -64,6 +70,75 @@ class ContractService {
           '${data is Map ? (data['message'] ?? data['error'] ?? data.toString()) : (data?.toString() ?? e.message)}';
       throw Exception('Erro ao consultar DocuSign: $msg');
     }
+  }
+
+  // ============ NOVOS MÉTODOS ============
+  Future<String> getRecipientViewUrl({
+    required String envelopeId,
+    required String email,
+    required String name,
+    required String clientUserId,
+    String? returnUrl,
+  }) async {
+    try {
+      final res = await _dio.get(
+        _recipientViewPath(envelopeId),
+        queryParameters: {
+          'email': email,
+          'name': name,
+          'clientUserId': clientUserId,
+          if (returnUrl != null && returnUrl.isNotEmpty) 'returnUrl': returnUrl,
+        },
+      );
+      final data = res.data;
+      final url = (data is Map && data['url'] != null) ? '${data['url']}' : null;
+      if (url == null || url.isEmpty) {
+        throw Exception('URL inválida retornada pelo servidor.');
+      }
+      return url;
+    } on DioException catch (e) {
+      final st = e.response?.statusCode;
+      final data = e.response?.data;
+      final msg = '[HTTP ${st ?? '-'}] '
+          '${data is Map ? (data['message'] ?? data['error'] ?? data.toString()) : (data?.toString() ?? e.message)}';
+      throw Exception('Erro ao criar Recipient View: $msg');
+    }
+  }
+
+  Future<String> getConsoleViewUrl({
+    required String envelopeId,
+    String? returnUrl,
+  }) async {
+    try {
+      final res = await _dio.get(
+        _consoleViewPath(envelopeId),
+        queryParameters: {
+          if (returnUrl != null && returnUrl.isNotEmpty) 'returnUrl': returnUrl,
+        },
+      );
+      final data = res.data;
+      final url = (data is Map && data['url'] != null) ? '${data['url']}' : null;
+      if (url == null || url.isEmpty) {
+        throw Exception('URL inválida retornada pelo servidor.');
+      }
+      return url;
+    } on DioException catch (e) {
+      final st = e.response?.statusCode;
+      final data = e.response?.data;
+      final msg = '[HTTP ${st ?? '-'}] '
+          '${data is Map ? (data['message'] ?? data['error'] ?? data.toString()) : (data?.toString() ?? e.message)}';
+      throw Exception('Erro ao criar Console View: $msg');
+    }
+  }
+
+  /// URL absoluta para abrir/baixar o PDF direto no navegador.
+  String getEnvelopePdfUrl(String envelopeId) {
+    final base = _dio.options.baseUrl;
+    final path = _pdfPath(envelopeId);
+    if (base.endsWith('/')) {
+      return '${base.substring(0, base.length - 1)}$path';
+    }
+    return '$base$path';
   }
 }
 

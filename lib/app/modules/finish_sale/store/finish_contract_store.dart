@@ -209,4 +209,47 @@ abstract class _FinishContractStoreBase with Store {
     }
     return null;
   }
+
+  /// Gera URL de assinatura embutida (Recipient View) e retorna a URL.
+  @action
+  Future<String?> criarRecipientViewUrl({String? returnUrl}) async {
+    final envId = contratoEnvelopeId;
+    final v = venda;
+    if (envId == null || envId.isEmpty || v == null) return null;
+
+    final email = _pickEmail(v.contatos ?? const <ContatoModel>[]) ?? '';
+    final name = (v.pessoaTitular?.nome ?? 'Cliente').trim();
+    final cpf = _digits(v.pessoaTitular?.cpf ?? '');
+    final clientUserId = cpf.isNotEmpty
+        ? cpf
+        : (nroProposta != null ? '${nroProposta!}' : 'cliente');
+
+    final url = await _contract.getRecipientViewUrl(
+      envelopeId: envId,
+      email: email,
+      name: name.isEmpty ? 'Cliente' : name,
+      clientUserId: clientUserId,
+      returnUrl: returnUrl,
+    );
+    return url;
+  }
+
+  /// Gera URL do Console DocuSign (Console View) e retorna a URL.
+  @action
+  Future<String?> criarConsoleViewUrl({String? returnUrl}) async {
+    final envId = contratoEnvelopeId;
+    if (envId == null || envId.isEmpty) return null;
+    final url = await _contract.getConsoleViewUrl(
+      envelopeId: envId,
+      returnUrl: returnUrl,
+    );
+    return url;
+  }
+
+  /// Retorna URL absoluta para abrir o PDF combinado do envelope.
+  String? getEnvelopePdfUrl() {
+    final envId = contratoEnvelopeId;
+    if (envId == null || envId.isEmpty) return null;
+    return _contract.getEnvelopePdfUrl(envId);
+  }
 }
