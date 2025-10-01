@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:e_vendas/app/core/widgets/version_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_modular/flutter_modular.dart';
@@ -239,6 +240,11 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
+                ),
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: const VersionBadge(),
                 ),
               ],
             ),

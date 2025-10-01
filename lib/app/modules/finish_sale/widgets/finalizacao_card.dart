@@ -258,7 +258,7 @@ class _FinalizacaoCardState extends State<FinalizacaoCard> {
                   ],
 
                   // Detalhes (expansível)
-                  _SuccessDetailsInline(data: data),
+                  //_SuccessDetailsInline(data: data),
 
                   const SizedBox(height: 16),
                   Row(

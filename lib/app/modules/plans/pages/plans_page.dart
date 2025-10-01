@@ -7,7 +7,19 @@ import 'package:e_vendas/app/modules/sales/stores/sales_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_modular/flutter_modular.dart';
+import 'package:flutter/gestures.dart'; // <- ADIÇÃO
 import '../stores/plans_store.dart';
+
+// Habilita arrastar com o mouse (sem mudar visual)
+class _DesktopDragBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.unknown,
+      };
+}
 
 class PlansPage extends StatefulWidget {
   final int? vendaIndex;
@@ -22,10 +34,20 @@ class _PlansPageState extends State<PlansPage> {
   final store = Modular.get<PlansStore>();
   final salesStore = Modular.get<SalesStore>();
 
+  // <- ADIÇÃO: controlador para rolar horizontalmente
+  late final ScrollController _hCtrl;
+
   @override
   void initState() {
     super.initState();
+    _hCtrl = ScrollController();
     store.loadPlans();
+  }
+
+  @override
+  void dispose() {
+    _hCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -49,23 +71,51 @@ class _PlansPageState extends State<PlansPage> {
               final cardWidth = isDesktop ? 360.0 : 320.0;
               final cardHeight = constraints.maxHeight * 0.85;
 
-              return ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                itemCount: plans.length,
-                itemBuilder: (context, index) {
-                  return Observer(
-                    builder: (_) {
-                      final plan = plans[index];
-                      return Container(
-                        width: cardWidth,
-                        height: cardHeight,
-                        margin: EdgeInsets.only(right: index == plans.length - 1 ? 0 : 20),
-                        child: _buildHorizontalCard(plan, vendaIndex),
+              // <- ENVOLVE a lista com ScrollConfiguration + Listener
+              return ScrollConfiguration(
+                behavior: _DesktopDragBehavior(),
+                child: Listener(
+                  onPointerSignal: (signal) {
+                    // Mapeia a rodinha do mouse (vertical) para o scroll horizontal
+                    if (signal is PointerScrollEvent && _hCtrl.hasClients) {
+                      // Usa dy (rodinha) e também dx (trackpad horizontal), priorizando quem tiver maior intensidade
+                      final delta = signal.scrollDelta;
+                      final move = (delta.dx.abs() > delta.dy.abs())
+                          ? delta.dx
+                          : delta.dy; // se o usuário estiver rolando “pra cima/baixo” com o mouse, usamos dy
+
+                      final target = (_hCtrl.offset + move).clamp(
+                        0.0,
+                        _hCtrl.position.maxScrollExtent,
+                      );
+                      // uso de jumpTo evita “briga” com o scroll vertical do pai
+                      _hCtrl.jumpTo(target);
+                    }
+                  },
+                  child: ListView.builder(
+                    controller: _hCtrl, // <- controlador
+                    scrollDirection: Axis.horizontal,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    itemCount: plans.length,
+                    physics:
+                        const ClampingScrollPhysics(), // desktop-like, sem bounce
+                    itemBuilder: (context, index) {
+                      return Observer(
+                        builder: (_) {
+                          final plan = plans[index];
+                          return Container(
+                            width: cardWidth,
+                            height: cardHeight,
+                            margin: EdgeInsets.only(
+                                right: index == plans.length - 1 ? 0 : 20),
+                            child: _buildHorizontalCard(plan, vendaIndex),
+                          );
+                        },
                       );
                     },
-                  );
-                },
+                  ),
+                ),
               );
             },
           );
@@ -125,12 +175,15 @@ class _PlansPageState extends State<PlansPage> {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Text(
               plan.nomeContrato,
               style: const TextStyle(
-                fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
             ),
           ),
@@ -149,9 +202,11 @@ class _PlansPageState extends State<PlansPage> {
                       onTap: () => store.setLives(plan.id, v),
                       child: Container(
                         margin: const EdgeInsets.symmetric(horizontal: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: isSelected ? AppColors.primary : Colors.grey[300],
+                          color:
+                              isSelected ? AppColors.primary : Colors.grey[300],
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -206,7 +261,8 @@ class _PlansPageState extends State<PlansPage> {
                   DropdownButton<int>(
                     value: store.getDueDay(plan.id),
                     items: List.generate(28, (i) => i + 1)
-                        .map((d) => DropdownMenuItem(value: d, child: Text('Dia $d')))
+                        .map((d) =>
+                            DropdownMenuItem(value: d, child: Text('Dia $d')))
                         .toList(),
                     onChanged: (v) {
                       if (v != null) store.setDueDay(plan.id, v);
@@ -222,7 +278,8 @@ class _PlansPageState extends State<PlansPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildValueBox(isMensal ? 'Mensalidade' : 'Anual (-10%)', isMensal ? mensal : anual),
+                _buildValueBox(isMensal ? 'Mensalidade' : 'Anual (-10%)',
+                    isMensal ? mensal : anual),
                 _buildValueBox('Adesão', adesao),
               ],
             ),
@@ -232,7 +289,8 @@ class _PlansPageState extends State<PlansPage> {
           const Divider(),
           const Padding(
             padding: EdgeInsets.all(8.0),
-            child: Text('Cobertura:', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text('Cobertura:',
+                style: TextStyle(fontWeight: FontWeight.bold)),
           ),
 
           // Lista de benefícios
@@ -243,9 +301,12 @@ class _PlansPageState extends State<PlansPage> {
               itemBuilder: (context, index) {
                 return Row(
                   children: [
-                    const Icon(Icons.check_circle, color: Colors.green, size: 16),
+                    const Icon(Icons.check_circle,
+                        color: Colors.green, size: 16),
                     const SizedBox(width: 6),
-                    Expanded(child: Text(beneficios[index], style: const TextStyle(fontSize: 13))),
+                    Expanded(
+                        child: Text(beneficios[index],
+                            style: const TextStyle(fontSize: 13))),
                   ],
                 );
               },
@@ -261,7 +322,8 @@ class _PlansPageState extends State<PlansPage> {
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   backgroundColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () async {
                   // vidas conforme venda (se edição) ou 1 (se nova)
@@ -272,7 +334,8 @@ class _PlansPageState extends State<PlansPage> {
                   }
 
                   final selectedAnnual = store.getIsAnnual(plan.id);
-                  final selectedDue = selectedAnnual ? null : store.getDueDay(plan.id);
+                  final selectedDue =
+                      selectedAnnual ? null : store.getDueDay(plan.id);
 
                   final planoSelecionado = plan.copyWith(
                     vidasSelecionadas: vidas,
@@ -281,7 +344,8 @@ class _PlansPageState extends State<PlansPage> {
                   );
 
                   if (vendaIndex != null) {
-                    await salesStore.atualizarPlano(vendaIndex, planoSelecionado);
+                    await salesStore.atualizarPlano(
+                        vendaIndex, planoSelecionado);
                   } else {
                     await salesStore.criarVendaComPlano(planoSelecionado);
                   }
@@ -300,7 +364,10 @@ class _PlansPageState extends State<PlansPage> {
     );
   }
 
-  Widget _choice({required String label, required bool selected, required VoidCallback onTap}) {
+  Widget _choice(
+      {required String label,
+      required bool selected,
+      required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -330,8 +397,11 @@ class _PlansPageState extends State<PlansPage> {
       ),
       child: Column(
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-          Text('R\$ $valor', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(label,
+              style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          Text('R\$ $valor',
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -367,4 +437,4 @@ class _PlansPageState extends State<PlansPage> {
     }
     return double.parse(value.toStringAsFixed(2));
   }
-}
+} 
