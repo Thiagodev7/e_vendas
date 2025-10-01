@@ -53,16 +53,12 @@ abstract class _FinishContractStoreBase with Store {
   @observable
   String? contratoEnvelopeId;
 
-  @observable
-  String? contratoUrl;
-
   @computed
   bool get podeDispararContrato => !loading && !contratoAssinadoServer;
 
   @action
   void bindVenda(VendaModel v) => venda = v;
 
-  /// aceita qualquer tipo e tenta converter para int
   @action
   void bindNroProposta(dynamic nro) => nroProposta = _coerceInt(nro);
 
@@ -70,7 +66,6 @@ abstract class _FinishContractStoreBase with Store {
   Future<ContractFlags?> syncFlags() async {
     final id = nroProposta;
     if (id == null) return null;
-
     checking = true;
     try {
       final flags = await _contract.buscarStatusContrato(id);
@@ -84,7 +79,6 @@ abstract class _FinishContractStoreBase with Store {
     }
   }
 
-  /// Dispara o DocuSign via backend (`POST /contracts/send`).
   @action
   Future<void> gerarContrato({
     required String enrollmentFmt,
@@ -93,7 +87,7 @@ abstract class _FinishContractStoreBase with Store {
     final v = venda;
     if (v == null) throw Exception('Venda não carregada.');
 
-    // Garante nro_proposta válido
+    // garante nroProposta
     if (nroProposta == null) {
       final nroRaw = await _sales.criarProposta(v, vendedorId: _defaultVendedorId);
       final parsed = _coerceInt(nroRaw);
@@ -107,42 +101,95 @@ abstract class _FinishContractStoreBase with Store {
       throw Exception('Contrato já assinado. Não é possível reenviar.');
     }
 
-    final titular = v.pessoaTitular;
-    final end = v.endereco;
+    final titular = v.pessoaTitular; // PessoaModel
+    final end = v.endereco;          // EnderecoModel
 
-    final nome = (titular?.nome ?? '').trim();
-
-    // e-mail e telefone vindos de ContatoModel
-    final email = _pickEmail(v.contatos ?? const <ContatoModel>[]) ?? '';
+    // contato (busca email/telefone válidos)
+    final email  = _pickEmail(v.contatos ?? const <ContatoModel>[]) ?? '';
     if (email.isEmpty) throw Exception('E-mail do titular é obrigatório.');
-    final phone = _pickPhone(v.contatos ?? const <ContatoModel>[]) ?? '';
+    final phone  = _pickPhone(v.contatos ?? const <ContatoModel>[]) ?? '';
     if (phone.isEmpty) throw Exception('Telefone do titular é obrigatório.');
 
-    final cpf = _digits(titular?.cpf ?? '');
-    final address = '${end?.logradouro ?? ''}, ${end?.numero ?? ''} ${end?.complemento ?? ''}'.trim();
-    final city = (end?.nomeCidade ?? '').trim();
-    final uf = (end?.siglaUf ?? '').toString().trim();
-    final cep = _digits(end?.cep ?? '');
+    // titular
+    final nome     = (titular?.nome ?? '').trim();
+    final cpf      = _digits(titular?.cpf ?? '');
+    final birth    = (titular?.dataNascimento ?? '').trim(); // "DD/MM/AAAA" no seu fluxo
+    final sexo     = titular?.idSexo.toString();             // "1"/"2" (será normalizado no backend)
+    final civilId  = titular?.idEstadoCivil ?? 0;
+    final civilStr = _estadoCivilTexto(civilId);
 
-    final plan = v.plano?.nomeContrato ?? 'Plano';
-    final deps = (v.dependentes ?? []).length;
+    final nomeMae  = (titular?.nomeMae ?? '').trim();
+    final nomePai  = (titular?.nomePai ?? '').trim();
+    final rg       = (titular?.rg ?? '').trim();
+    final rgData   = (titular?.rgDataEmissao ?? '').trim();       // "DD/MM/AAAA" (seu dado)
+    final rgOrgao  = (titular?.rgOrgaoEmissor ?? '').trim();
+    final cns      = (titular?.cns ?? '').trim();
+    final natural  = (titular?.naturalde ?? '').trim();
+
+    // endereço
+    final address   = '${end?.logradouro ?? ''}, ${end?.numero ?? ''}'.trim();
+    final complement= (end?.complemento ?? '').trim();
+    final city      = (end?.nomeCidade ?? '').trim();
+    final uf        = (end?.siglaUf ?? '').toString().trim();
+    final cep       = _digits(end?.cep ?? '');
+
+    // plano/vidas
+    final plan  = v.plano?.nomeContrato ?? 'Plano';
+    final deps  = v.dependentes ?? const [];
+    final depsData = deps.map<Map<String, dynamic>>((d) {
+      final nomeDep = (d.nome ?? (d as dynamic).nomeCompleto ?? '').toString().trim();
+      final cpfDep  = _digits(d.cpf);
+      final sexoDep = (d.idSexo).toString(); // "1"/"2" (ou texto)
+      // se houver campo parentesco/idGrauDependencia no seu dependente, mapeie aqui:
+      final parent  = (d.idGrauDependencia?.toString() ?? (d as dynamic).parentesco?.toString() ?? '').trim();
+      return <String, dynamic>{
+        'name': nomeDep,
+        'cpf': cpfDep,
+        'sex': sexoDep,
+        'parent': parent,
+      };
+    }).toList();
 
     final body = <String, dynamic>{
-      'nroProposta': nroProposta, // já garantido int
+      // proposta
+      'nroProposta': nroProposta,
+
+      // titular
       'email': email,
       'name': nome.isEmpty ? 'Cliente' : nome,
       'cpf': cpf,
       'phone': phone,
-      'birth': titular?.dataNascimento ?? '',
-      'sex': titular?.idSexo?.toString() ?? '',
+      'birth': birth,
+      'sex': sexo,               // "1"/"2" ou "Masculino/Feminino" — normalizo no Node
+      'civilStatus': civilStr,   // texto (também mando id abaixo se quiser usar)
+      'civilStatusId': civilId,  // numérico cru (opcional)
+
+      // docs/saúde
+      'rg': rg,
+      'rgIssuer': rgOrgao,
+      'rgIssueDate': rgData,
+      'cns': cns,
+      'naturalDe': natural,
+      'motherName': nomeMae,
+      'fatherName': nomePai,
+
+      // endereço
       'address': address,
+      'signerComplement': complement,
       'city': city,
       'uf': uf,
       'cep': cep,
+
+      // plano/valores
       'plan': plan,
-      'dependents': deps,
+      'dependents': deps.length,
       'enrollment': enrollmentFmt,
       'monthly': monthlyFmt,
+
+      // dependentes detalhados
+      'dependentsData': depsData,
+      // opcional: "Titular" no parentesco do próprio titular
+      'signerParent': 'Titular',
     };
 
     loading = true;
@@ -177,9 +224,7 @@ abstract class _FinishContractStoreBase with Store {
     if (v is num) return v.toInt();
     if (v is String) return int.tryParse(v.trim());
     if (v is Map) {
-      return _coerceInt(
-        v['nroProposta'] ?? v['nro_proposta'] ?? v['propostaId'] ?? v['id'],
-      );
+      return _coerceInt(v['nroProposta'] ?? v['nro_proposta'] ?? v['propostaId'] ?? v['id']);
     }
     return null;
   }
@@ -210,6 +255,17 @@ abstract class _FinishContractStoreBase with Store {
     return null;
   }
 
+  String _estadoCivilTexto(int id) {
+    switch (id) {
+      case 1: return 'Solteiro(a)';
+      case 2: return 'Casado(a)';
+      case 3: return 'Divorciado(a)';
+      case 4: return 'Viúvo(a)';
+      case 5: return 'Separado(a)';
+      case 6: return 'União Estável';
+      default: return '';
+    }
+  }
   /// Gera URL de assinatura embutida (Recipient View) e retorna a URL.
   @action
   Future<String?> criarRecipientViewUrl({String? returnUrl}) async {

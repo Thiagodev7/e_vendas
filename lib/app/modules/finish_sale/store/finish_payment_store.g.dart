@@ -29,6 +29,13 @@ mixin _$FinishPaymentStore on _FinishPaymentStoreBase, Store {
       (_$currentMyIdComputed ??= Computed<String?>(() => super.currentMyId,
               name: '_FinishPaymentStoreBase.currentMyId'))
           .value;
+  Computed<bool>? _$canCheckStatusComputed;
+
+  @override
+  bool get canCheckStatus =>
+      (_$canCheckStatusComputed ??= Computed<bool>(() => super.canCheckStatus,
+              name: '_FinishPaymentStoreBase.canCheckStatus'))
+          .value;
   Computed<int>? _$valorCelcoinCentavosComputed;
 
   @override
@@ -335,6 +342,7 @@ pagamentoConcluidoServer: ${pagamentoConcluidoServer},
 numMonths: ${numMonths},
 dueDay: ${dueDay},
 currentMyId: ${currentMyId},
+canCheckStatus: ${canCheckStatus},
 valorCelcoinCentavos: ${valorCelcoinCentavos},
 valorCelcoinFmt: ${valorCelcoinFmt}
     ''';

@@ -182,22 +182,6 @@ mixin _$FinishContractStore on _FinishContractStoreBase, Store {
     });
   }
 
-  late final _$contratoUrlAtom =
-      Atom(name: '_FinishContractStoreBase.contratoUrl', context: context);
-
-  @override
-  String? get contratoUrl {
-    _$contratoUrlAtom.reportRead();
-    return super.contratoUrl;
-  }
-
-  @override
-  set contratoUrl(String? value) {
-    _$contratoUrlAtom.reportWrite(value, super.contratoUrl, () {
-      super.contratoUrl = value;
-    });
-  }
-
   late final _$syncFlagsAsyncAction =
       AsyncAction('_FinishContractStoreBase.syncFlags', context: context);
 
@@ -264,7 +248,6 @@ pagamentoConcluidoServer: ${pagamentoConcluidoServer},
 contratoAssinadoServer: ${contratoAssinadoServer},
 vendaFinalizadaServer: ${vendaFinalizadaServer},
 contratoEnvelopeId: ${contratoEnvelopeId},
-contratoUrl: ${contratoUrl},
 podeDispararContrato: ${podeDispararContrato}
     ''';
   }
