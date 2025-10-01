@@ -29,6 +29,7 @@ dependencies:
   qr_flutter: ^4.1.0
   intl: ^0.20.2
   package_info_plus: ^9.0.0
+  msix: ^3.16.12
 
 dev_dependencies:
   flutter_test:
@@ -46,3 +47,10 @@ flutter:
   assets:
     - assets/images/logo_complete.png
     - assets/images/logo_white.png
+
+msix_config:
+  display_name: E-Vendas
+  publisher_display_name: Uniodonto Goiânia
+  identity_name: com.uniodonto.evendas
+  msix_version: 1.0.0.0
+  logo_path: assets/windows_logo.png
