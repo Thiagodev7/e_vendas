@@ -30,6 +30,8 @@ dependencies:
   intl: ^0.20.2
   package_info_plus: ^9.0.0
   msix: ^3.16.12
+  wakelock_plus: ^1.4.0
+  flutter_svg: ^2.2.0
 
 dev_dependencies:
   flutter_test:
@@ -47,6 +49,7 @@ flutter:
   assets:
     - assets/images/logo_complete.png
     - assets/images/logo_white.png
+    - assets/images/logo_somoscoop_verde.svg
 
 msix_config:
   display_name: E-Vendas

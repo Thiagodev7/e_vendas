@@ -3,6 +3,7 @@ import 'package:e_vendas/app/modules/client/client_module.dart';
 import 'package:e_vendas/app/modules/finish_sale/finish_sale_module.dart';
 import 'package:e_vendas/app/modules/plans/plans_module.dart';
 import 'package:e_vendas/app/modules/sales/sales_module.dart';
+import 'package:e_vendas/app/modules/totem/totem_module.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'modules/auth/pages/login_page.dart';
 import 'modules/home/home_module.dart';
@@ -23,5 +24,6 @@ class AppModule extends Module {
     r.module('/client', module: ClientModule());
     r.module('/sales', module: SalesModule());
     r.module('/finish-sale', module: FinishSaleModule());
+    r.module('/totem', module: TotemModule());
   }
 }

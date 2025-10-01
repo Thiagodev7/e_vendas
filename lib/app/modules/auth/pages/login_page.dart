@@ -38,24 +38,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-
-    // Logo scale/fade
-    _logoController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..forward();
-
-    // Campos fade/slide
-    _fieldsController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..forward();
-
-    // Gradiente animado
-    _gradientController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 6),
-    )..repeat(reverse: true);
+    _logoController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..forward();
+    _fieldsController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))..forward();
+    _gradientController = AnimationController(vsync: this, duration: const Duration(seconds: 6))..repeat(reverse: true);
   }
 
   @override
@@ -77,8 +62,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         builder: (context, child) {
           final t = _gradientController.value;
           final color1 = Color.lerp(AppColors.primary, AppColors.secondary, t)!;
-          final color2 =
-              Color.lerp(AppColors.secondary, AppColors.lilac, 1 - t)!;
+          final color2 = Color.lerp(AppColors.secondary, AppColors.lilac, 1 - t)!;
 
           return Container(
             width: double.infinity,
@@ -92,7 +76,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             ),
             child: Stack(
               children: [
-                // Partículas animadas
+                // Partículas (mesmo visual)
                 ..._particles.map((p) {
                   final dx = (p.dx * MediaQuery.of(context).size.width +
                       sin(DateTime.now().millisecondsSinceEpoch / 500) * 20);
@@ -118,10 +102,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     child: FadeTransition(
                       opacity: _logoController,
                       child: ScaleTransition(
-                        scale: CurvedAnimation(
-                          parent: _logoController,
-                          curve: Curves.elasticOut,
-                        ),
+                        scale: CurvedAnimation(parent: _logoController, curve: Curves.elasticOut),
                         child: Container(
                           width: isDesktop ? 420 : double.infinity,
                           margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -129,23 +110,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           decoration: BoxDecoration(
                             color: Theme.of(context).colorScheme.surface,
                             borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 10,
-                                offset: const Offset(0, 5),
-                              ),
-                            ],
+                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 5))],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              // Logo
                               Center(
-                                child: Image.asset(
-                                  'assets/images/logo_complete.png',
-                                  height: 90,
-                                ),
+                                child: Image.asset('assets/images/logo_complete.png', height: 90),
                               ),
                               const SizedBox(height: 20),
                               Center(
@@ -154,40 +125,27 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                   style: TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.bold,
-                                    color:
-                                        Theme.of(context).colorScheme.onSurface,
+                                    color: Theme.of(context).colorScheme.onSurface,
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 32),
 
-                              // Campos com animação slide/fade
                               SlideTransition(
-                                position: Tween<Offset>(
-                                  begin: const Offset(0, 0.3),
-                                  end: Offset.zero,
-                                ).animate(_fieldsController),
+                                position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(_fieldsController),
                                 child: FadeTransition(
                                   opacity: _fieldsController,
                                   child: Column(
                                     children: [
-                                      CustomTextField(
-                                        label: 'Usuário',
-                                        controller: usernameController,
-                                      ),
+                                      CustomTextField(label: 'Usuário', controller: usernameController),
                                       const SizedBox(height: 16),
-                                      CustomTextField(
-                                        label: 'Senha',
-                                        controller: passwordController,
-                                        obscure: true,
-                                      ),
+                                      CustomTextField(label: 'Senha', controller: passwordController, obscure: true),
                                     ],
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 24),
 
-                              // Botão de login animado
                               Observer(
                                 builder: (_) => CustomButton(
                                   text: 'Entrar',
@@ -197,40 +155,32 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                     store.setPassword(passwordController.text);
                                     final success = await store.login();
                                     if (success && mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                            content: Text('Login realizado!')),
-                                      );
-                                      if (success && mounted) {
-                                        Modular.to.navigate('/home/');
-                                      }
-                                    } else if (store.errorMessage != null) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                            content: Text(store.errorMessage!)),
-                                      );
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Login realizado!')));
+                                      Modular.to.navigate('/home/');
+                                    } else if (store.errorMessage != null && mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(store.errorMessage!)));
                                     }
                                   },
                                 ),
                               ),
-                              const SizedBox(height: 16),
 
-                              TextButton(
-                                onPressed: () {},
-                                child: const Text('Esqueceu a senha?'),
+                              const SizedBox(height: 12),
+
+                              // NOVO: Botão para o modo Tótem (sem alterar o visual principal)
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.storefront_rounded),
+                                label: const Text('Modo autoatendimento (Tótem)'),
+                                onPressed: () => Modular.to.navigate('/totem/'),
                               ),
+
+                              const SizedBox(height: 16),
+                              TextButton(onPressed: () {}, child: const Text('Esqueceu a senha?')),
                               const SizedBox(height: 16),
 
                               Align(
                                 alignment: Alignment.center,
                                 child: IconButton(
-                                  icon: Icon(
-                                    themeStore.isDark
-                                        ? Icons.dark_mode
-                                        : Icons.light_mode,
-                                  ),
+                                  icon: Icon(themeStore.isDark ? Icons.dark_mode : Icons.light_mode),
                                   onPressed: () => themeStore.toggleTheme(),
                                 ),
                               ),
@@ -241,11 +191,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-                Positioned(
-                  right: 12,
-                  bottom: 12,
-                  child: const VersionBadge(),
-                ),
+                const Positioned(right: 12, bottom: 12, child: VersionBadge()),
               ],
             ),
           );
