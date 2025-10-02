@@ -164,14 +164,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                 ),
                               ),
 
-                              const SizedBox(height: 12),
-
-                              // NOVO: Botão para o modo Tótem (sem alterar o visual principal)
-                              OutlinedButton.icon(
-                                icon: const Icon(Icons.storefront_rounded),
-                                label: const Text('Modo autoatendimento (Tótem)'),
-                                onPressed: () => Modular.to.navigate('/totem/'),
-                              ),
+                              
 
                               const SizedBox(height: 16),
                               TextButton(onPressed: () {}, child: const Text('Esqueceu a senha?')),

@@ -46,7 +46,9 @@ class _HomePageState extends State<HomePage> {
                           children: [
                             Expanded(child: _buildMetricsGrid()),
                             const SizedBox(width: 24),
-                            Expanded(child: RecentSalesCard(vendedorId: 12, limit: 8),),
+                            Expanded(
+                              child: RecentSalesCard(vendedorId: 12, limit: 8),
+                            ),
                           ],
                         )
                       : ListView(
@@ -93,6 +95,14 @@ class _HomePageState extends State<HomePage> {
           label: 'Planos',
           color: AppColors.guava,
           onTap: () => Modular.to.pushNamed('/plans'),
+        ),
+        const SizedBox(height: 12),
+
+        // NOVO: Botão para o modo Tótem (sem alterar o visual principal)
+        OutlinedButton.icon(
+          icon: const Icon(Icons.storefront_rounded),
+          label: const Text('Modo autoatendimento (Tótem)'),
+          onPressed: () => Modular.to.navigate('/totem/'),
         ),
       ],
     );
