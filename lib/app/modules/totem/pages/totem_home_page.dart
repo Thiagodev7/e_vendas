@@ -26,7 +26,8 @@ class _TotemHomePageState extends State<TotemHomePage>
   late final AnimationController _contentInCtrl;
   late final AnimationController _pulseCtrl;
   late final AnimationController _sheenCtrl;
-  late final AnimationController _floatCtrl; // Animação de flutuação
+  late final AnimationController _floatCtrl;
+  late final AnimationController _auroraCtrl; // <--- Controlador para o novo efeito
 
   // Acessibilidade
   double _textScale = 1.0;
@@ -44,6 +45,8 @@ class _TotemHomePageState extends State<TotemHomePage>
     _pulseCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat(reverse: true);
     _sheenCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat();
     _floatCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 6),)..repeat(reverse: true);
+    // Novo controlador para o efeito aurora
+    _auroraCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat();
   }
 
   @override
@@ -52,11 +55,12 @@ class _TotemHomePageState extends State<TotemHomePage>
     _pulseCtrl.dispose();
     _sheenCtrl.dispose();
     _floatCtrl.dispose();
+    _auroraCtrl.dispose();
     KioskService.exitKiosk();
     super.dispose();
   }
 
-  // ... (O restante dos seus métodos como _askExitPin, _openAccessibilitySheet, etc. permanecem os mesmos)
+    // ... (O restante dos seus métodos como _askExitPin, etc. permanecem os mesmos)
   Future<void> _askExitPin() async {
     final ctrl = TextEditingController();
     final ok = await showDialog<bool>(
@@ -187,11 +191,9 @@ class _TotemHomePageState extends State<TotemHomePage>
     final scaledMQ = baseMQ.copyWith(textScaleFactor: (baseMQ.textScaleFactor * _textScale).clamp(1.0, 1.8));
     final cs = Theme.of(context).colorScheme;
 
-    // Animação de flutuação para o card
     final floatAnim = CurvedAnimation(parent: _floatCtrl, curve: Curves.easeInOut);
     final floatOffset = Tween<Offset>(begin: const Offset(0, -0.005), end: const Offset(0, 0.005)).animate(floatAnim);
     
-    // Animação de entrada com perspectiva
     final entryAnim = CurvedAnimation(parent: _contentInCtrl, curve: Curves.easeOutCubic);
     final perspective = Tween<double>(begin: -0.4, end: 0.0).animate(entryAnim);
     final titleAnim = CurvedAnimation(parent: _contentInCtrl, curve: const Interval(0.2, 0.7, curve: Curves.easeOutCubic));
@@ -207,10 +209,7 @@ class _TotemHomePageState extends State<TotemHomePage>
             body: SafeArea(
               child: Stack(
                 children: [
-                  // FUNDO ANIMADO COM BLOBS
                   const Positioned.fill(child: AnimatedBlobBackground()),
-        
-                  // AÇÕES NO TOPO
                   Positioned(
                     right: 12,
                     top: 8,
@@ -222,33 +221,35 @@ class _TotemHomePageState extends State<TotemHomePage>
                       ],
                     ),
                   ),
-        
-                  // BLOCO CENTRAL
                   Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // TÍTULO "CENTRAL DE VENDAS"
                         FadeTransition(
                           opacity: titleAnim,
                           child: SlideTransition(
                             position: Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero).animate(titleAnim),
-                            child: Text(
-                              'Portal de Vendas',
-                              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: cs.onSurface,
-                                shadows: [
-                                  Shadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)
-                                ]
+                            child: FittedBox(
+                              fit: BoxFit.contain,
+                              child: _AuroraText(
+                                text: 'Portal de Vendas',
+                                animation: _auroraCtrl,
+                                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      // Sombra para destacar contra o fundo
+                                      shadows: [
+                                        const Shadow(
+                                          color: Colors.black38,
+                                          blurRadius: 10,
+                                          offset: Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
                               ),
-                              textAlign: TextAlign.center,
                             ),
                           ),
                         ),
                         const SizedBox(height: 24),
-        
-                        // CARD ANIMADO
                         SlideTransition(
                           position: floatOffset,
                           child: AnimatedBuilder(
@@ -282,8 +283,6 @@ class _TotemHomePageState extends State<TotemHomePage>
                       ],
                     ),
                   ),
-                  
-                  // ÍCONES INFERIORES
                   const Positioned(left: 16, bottom: 12, child: VersionBadge()),
                   const Positioned(right: 16, bottom: 12, child: _CornerLogo(heightFactor: 0.08)),
                 ],
@@ -295,6 +294,53 @@ class _TotemHomePageState extends State<TotemHomePage>
     );
   }
 }
+
+// --- WIDGET DO TÍTULO COM EFEITO AURORA (NOVO) ---
+class _AuroraText extends AnimatedWidget {
+  const _AuroraText({
+    required this.text,
+    required Animation<double> animation,
+    this.style,
+  }) : super(listenable: animation);
+
+  final String text;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final animation = listenable as Animation<double>;
+
+    final baseStyle = (style ?? DefaultTextStyle.of(context).style).copyWith(color: Colors.white);
+
+    return ShaderMask(
+      blendMode: BlendMode.srcIn,
+      shaderCallback: (bounds) {
+        // O valor da animação controla a rotação do gradiente
+        final angle = animation.value * 2 * pi;
+
+        return SweepGradient(
+          center: FractionalOffset.center,
+          colors: [
+            cs.primary,
+            cs.secondary,
+            cs.tertiary ?? cs.primary, // Usa uma terceira cor se disponível
+            cs.primary, // Fecha o ciclo
+          ],
+          stops: const [0.0, 0.4, 0.7, 1.0],
+          transform: GradientRotation(angle),
+        ).createShader(bounds);
+      },
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: baseStyle,
+      ),
+    );
+  }
+}
+
+// ... O restante do código permanece o mesmo.
 
 // --- WIDGETS DE COMPOSIÇÃO ---
 class _WhiteCard extends StatelessWidget {
@@ -345,7 +391,6 @@ class _CenterBlock extends StatelessWidget {
 
   final bool highContrast;
 
-  // Widget wrapper para animações de entrada escalonadas
   Widget _animWrapper(Animation<double> anim, Widget child, {double dy = 0.08}) {
     return FadeTransition(
       opacity: anim,
@@ -362,12 +407,10 @@ class _CenterBlock extends StatelessWidget {
     final h = MediaQuery.of(context).size.height;
     final mainLogoHeight = (h * 0.20).clamp(80.0, 150.0);
 
-    // Curvas de animação para cada elemento
     final logoAnim = CurvedAnimation(parent: entryAnimation, curve: const Interval(0.0, 0.6, curve: Curves.easeOutCubic));
     final subtitleAnim = CurvedAnimation(parent: entryAnimation, curve: const Interval(0.3, 0.8, curve: Curves.easeOutCubic));
     final buttonAnim = CurvedAnimation(parent: entryAnimation, curve: const Interval(0.4, 1.0, curve: Curves.easeOutCubic));
 
-    // Animações contínuas
     final scale = Tween<double>(begin: 0.98, end: 1.01).animate(CurvedAnimation(parent: pulse, curve: Curves.easeInOut));
     final sheenAnim = Tween<double>(begin: -1.0, end: 2.0).animate(CurvedAnimation(parent: sheen, curve: Curves.easeInOut));
     
@@ -436,7 +479,6 @@ class _SheenButton extends StatelessWidget {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Glow
         Transform.scale(
           scale: 1.1,
           child: DecoratedBox(
@@ -454,7 +496,6 @@ class _SheenButton extends StatelessWidget {
             child: const SizedBox(height: 60, width: double.infinity),
           ),
         ),
-        // Botão + Sheen
         ClipRRect(
           borderRadius: BorderRadius.circular(100),
           child: Stack(
@@ -507,7 +548,7 @@ class _CornerLogo extends StatelessWidget {
   }
 }
 
-// --- FUNDO ANIMADO (NOVO) ---
+// --- FUNDO ANIMADO ---
 class AnimatedBlobBackground extends StatefulWidget {
   const AnimatedBlobBackground({super.key});
 
@@ -558,7 +599,6 @@ class BlobPainter extends CustomPainter {
     final paint = Paint()..color = color.withOpacity(0.3);
     final t = animation.value;
 
-    // Blob 1
     final pos1 = Offset(
       size.width * (0.2 + 0.2 * sin(t * pi * 2 + 0.5)),
       size.height * (0.3 - 0.2 * cos(t * pi * 2 + 0.5)),
@@ -566,7 +606,6 @@ class BlobPainter extends CustomPainter {
     final r1 = size.width * (0.35 + 0.1 * sin(t * pi * 2));
     canvas.drawCircle(pos1, r1, paint);
 
-    // Blob 2
     final pos2 = Offset(
       size.width * (0.8 - 0.15 * sin(t * pi * 1.5 + 1.0)),
       size.height * (0.7 + 0.15 * cos(t * pi * 1.5 + 1.0)),
@@ -574,7 +613,6 @@ class BlobPainter extends CustomPainter {
     final r2 = size.width * (0.3 + 0.08 * cos(t * pi * 2.5));
     canvas.drawCircle(pos2, r2, paint);
 
-    // Blob 3
     final pos3 = Offset(
       size.width * (0.6 + 0.2 * cos(t * pi * 2.2 + 2.0)),
       size.height * (0.1 + 0.1 * sin(t * pi * 2.2 + 2.0)),
@@ -582,7 +620,6 @@ class BlobPainter extends CustomPainter {
     final r3 = size.width * (0.25 + 0.05 * sin(t * pi * 1.8));
     canvas.drawCircle(pos3, r3, paint);
 
-    // Adiciona um desfoque geral para o efeito "líquido"
     canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint());
     canvas.drawPaint(Paint()..color = Colors.white.withOpacity(0.01));
     canvas.restore();

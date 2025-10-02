@@ -34,6 +34,7 @@ class _TotemSelectPlanPageState extends State<TotemSelectPlanPage>
 
   late Future<List<PlanModel>> _future;
   late final AnimationController _animationCtrl;
+  late final AnimationController _auroraCtrl; // <--- Controlador para o título animado
   final _pageCtrl = PageController(viewportFraction: 0.82);
 
   // Controle de estado local
@@ -48,6 +49,9 @@ class _TotemSelectPlanPageState extends State<TotemSelectPlanPage>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     )..forward();
+    
+    // Inicializa o controlador da animação do título
+    _auroraCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat();
 
     if (_totem.selectedPlan != null) {
       _selectedPlanId = _totem.selectedPlan!.id;
@@ -58,6 +62,7 @@ class _TotemSelectPlanPageState extends State<TotemSelectPlanPage>
   @override
   void dispose() {
     _animationCtrl.dispose();
+    _auroraCtrl.dispose(); // <--- Dispose do controlador
     _pageCtrl.dispose();
     super.dispose();
   }
@@ -93,7 +98,7 @@ class _TotemSelectPlanPageState extends State<TotemSelectPlanPage>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${finalPlan.nomeContrato} selecionado!')),
       );
-      // Modular.to.pushNamed('/totem/dados-cliente');
+      Modular.to.pushNamed('/totem/cliente');
     });
   }
 
@@ -163,13 +168,23 @@ class _TotemSelectPlanPageState extends State<TotemSelectPlanPage>
               children: [
                 Padding(
                   padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    'Escolha o Melhor Plano Para Você',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: cs.onSurface,
-                        ),
-                    textAlign: TextAlign.center,
+                  // *** TÍTULO ATUALIZADO AQUI ***
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: _AuroraText(
+                      text: 'Escolha o Melhor Plano Para Você',
+                      animation: _auroraCtrl,
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            shadows: [
+                              const Shadow(
+                                color: Colors.black38,
+                                blurRadius: 10,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                    ),
                   ),
                 ),
                 Expanded(
@@ -270,6 +285,50 @@ class _TotemSelectPlanPageState extends State<TotemSelectPlanPage>
   }
 }
 
+// --- WIDGET DO TÍTULO COM EFEITO AURORA (ADICIONADO) ---
+class _AuroraText extends AnimatedWidget {
+  const _AuroraText({
+    required this.text,
+    required Animation<double> animation,
+    this.style,
+  }) : super(listenable: animation);
+
+  final String text;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final animation = listenable as Animation<double>;
+
+    final baseStyle = (style ?? DefaultTextStyle.of(context).style).copyWith(color: Colors.white);
+
+    return ShaderMask(
+      blendMode: BlendMode.srcIn,
+      shaderCallback: (bounds) {
+        final angle = animation.value * 2 * pi;
+
+        return SweepGradient(
+          center: FractionalOffset.center,
+          colors: [
+            cs.primary,
+            cs.secondary,
+            cs.tertiary ?? cs.primary,
+            cs.primary,
+          ],
+          stops: const [0.0, 0.4, 0.7, 1.0],
+          transform: GradientRotation(angle),
+        ).createShader(bounds);
+      },
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: baseStyle,
+      ),
+    );
+  }
+}
+
 // ================== CARD DO PLANO (AJUSTADO) ==================
 
 class _PlanCard extends StatelessWidget {
@@ -331,7 +390,6 @@ class _PlanCard extends StatelessWidget {
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
               color: cs.surface.withOpacity(0.85),
-              // Adicionado SingleChildScrollView para permitir rolagem interna
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -345,12 +403,11 @@ class _PlanCard extends StatelessWidget {
                       child: Text('Principais Coberturas', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                     ),
                     const SizedBox(height: 8),
-                    // Lista de benefícios sem limitação de altura
                     ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       itemCount: beneficios.length,
-                      shrinkWrap: true, // Essencial para o ListView dentro de um ScrollView
-                      physics: const NeverScrollableScrollPhysics(), // Delega a rolagem para o pai
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
                       itemBuilder: (_, index) => _BenefitItem(text: beneficios[index]),
                     ),
                     const SizedBox(height: 16),
@@ -388,8 +445,8 @@ class _PlanCard extends StatelessWidget {
   }
 }
 
+// ... O restante do código (Widgets de Suporte, Fundo Animado, etc.) permanece o mesmo.
 
-// ... O restante do código (Widgets de Suporte, Fundo Animado, Helpers) permanece o mesmo.
 // ================== WIDGETS DE SUPORTE ==================
 class _CardHeader extends StatelessWidget {
   const _CardHeader({required this.title, required this.adesao});
