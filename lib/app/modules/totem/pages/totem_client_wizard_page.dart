@@ -126,8 +126,7 @@ class _TotemClientWizardPageState extends State<TotemClientWizardPage>
                           _StepResumo(
                             onVoltar: () => _go(_Step.responsavel),
                             onConfirm: () {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dados confirmados! Próximo passo...')));
-                              // Modular.to.pushNamed('/totem/checkout');
+                              Modular.to.pushNamed('/totem/finalizar');
                             },
                           ),
                         ],
