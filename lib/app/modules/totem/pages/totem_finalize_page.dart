@@ -3,12 +3,19 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:e_vendas/app/core/model/contato_model.dart';
 import 'package:e_vendas/app/core/model/generic_state_model.dart';
+import 'package:e_vendas/app/core/model/pessoa_model.dart';
+import 'package:e_vendas/app/core/model/endereco_model.dart';
 import 'package:e_vendas/app/core/model/plano_model.dart';
+import 'package:e_vendas/app/core/model/venda_model.dart';
+import 'package:e_vendas/app/modules/finish_sale/store/finish_contract_store.dart';
 import 'package:e_vendas/app/modules/finish_sale/widgets/billing_calculator.dart';
 import 'package:e_vendas/app/modules/totem/stores/totem_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_modular/flutter_modular.dart';
+
+// ====== mesma enum/peças do arquivo anterior ======
+enum _PayMethod { pix, card, boleto }
 
 class TotemFinalizePage extends StatefulWidget {
   const TotemFinalizePage({super.key});
@@ -21,6 +28,11 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
     with TickerProviderStateMixin {
   late final AnimationController _titleAnimCtrl;
   late final AnimationController _cardAnimCtrl;
+
+  final _totem = Modular.get<TotemStore>();
+  final _contract = Modular.get<FinishContractStore>();
+
+  bool _generating = false;
 
   @override
   void initState() {
@@ -43,11 +55,10 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final totem = Modular.get<TotemStore>();
 
-    // ========== CALCULO DE VALORES (seguindo billing_calculator) ==========
-    final vidas = totem.dependentes.length + 1;
-    final PlanModel? planBase = totem.selectedPlan;
+    // ===== Cálculo de valores (usa billing_calculator) =====
+    final vidas = _totem.dependentes.length + 1;
+    final PlanModel? planBase = _totem.selectedPlan;
     final PlanModel? planForBilling =
         planBase?.copyWith(vidasSelecionadas: vidas);
     final BillingBreakdown? billing =
@@ -61,7 +72,6 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
           SafeArea(
             child: Column(
               children: [
-                // Título
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: FadeTransition(
@@ -76,7 +86,6 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
                     ),
                   ),
                 ),
-                // Sub
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                   child: Text(
@@ -89,7 +98,6 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
                   ),
                 ),
                 const SizedBox(height: 8),
-                // Card com resumo (rolável dentro)
                 Expanded(
                   child: FadeTransition(
                     opacity: _cardAnimCtrl,
@@ -101,7 +109,7 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
                       child: _SummaryCard(
                         billing: billing,
                         vidas: vidas,
-                        totem: totem,
+                        totem: _totem,
                       ),
                     ),
                   ),
@@ -117,7 +125,7 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => Modular.to.pop(), // volta
+                onPressed: () => Modular.to.pop(),
                 icon: const Icon(Icons.arrow_back_ios_new_rounded),
                 label: const Text('Voltar'),
                 style: OutlinedButton.styleFrom(
@@ -130,21 +138,25 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
               ),
             ),
             const SizedBox(width: 12),
+
+            // === Gerar contrato + abrir WebView de assinatura (embutido)
             Expanded(
               child: FilledButton.tonalIcon(
-                onPressed: () => _onGenerateContract(context),
-                icon: const Icon(Icons.description_outlined),
-                label: const Text('Gerar contrato'),
+                onPressed: (_generating || planForBilling == null) ? null : () => _onGenerateAndSign(planForBilling),
+                icon: _generating
+                    ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.draw_rounded),
+                label: const Text('Gerar contrato e assinar'),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 18),
                   textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(100),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                 ),
               ),
             ),
             const SizedBox(width: 12),
+
+            // === Pagamento (opcional, permanece se você quiser cobrar antes)
             Expanded(
               child: FilledButton.icon(
                 onPressed: (billing == null) ? null : () => _onPay(context, billing),
@@ -153,9 +165,7 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 18),
                   textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(100),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
                 ),
               ),
             ),
@@ -166,48 +176,67 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
   }
 
   // ======================
-  // AÇÕES
+  // CONTRATO + ASSINATURA
   // ======================
 
-  Future<void> _onGenerateContract(BuildContext context) async {
-    final totem = Modular.get<TotemStore>();
-    // TODO: Monte o payload e chame seu serviço de contratos
-    // final bytes = await ContractService().gerarContrato(payload);
+  Future<void> _onGenerateAndSign(PlanModel planForBilling) async {
+    try {
+      setState(() => _generating = true);
 
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.description_outlined, size: 36),
-            const SizedBox(height: 8),
-            Text('Contrato do plano',
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            Text(
-              'Integre aqui com seu serviço para gerar e exibir o contrato (PDF) para assinatura.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Contrato gerado (exemplo).')),
-                );
-              },
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              label: const Text('Visualizar contrato (exemplo)'),
-            ),
-          ],
-        ),
-      ),
+      // 1) Monta a venda a partir do TotemStore
+      final venda = _buildVendaFromTotem(planForBilling);
+
+      // 2) Vincula no store
+      _contract.bindVenda(venda);
+
+      // 3) Formata mensalidade/adesão no mesmo padrão do seu ContratoCard
+      final dynamic monthlyRaw    = planForBilling.getMensalidade() ?? planForBilling.getMensalidadeTotal();
+      final dynamic enrollmentRaw = planForBilling.getTaxaAdesao()  ?? planForBilling.getTaxaAdesaoTotal();
+      final String monthlyFmt     = _fmtCurrency(monthlyRaw);
+      final String enrollmentFmt  = _fmtCurrency(enrollmentRaw);
+
+      // 4) Envia para gerar o envelope (DocuSign)
+      await _contract.gerarContrato(
+        enrollmentFmt: enrollmentFmt,
+        monthlyFmt: monthlyFmt,
+      );
+
+      // 5) Cria a URL de Recipient View (embutida) e abre WebView
+      final url = await _contract.criarRecipientViewUrl(
+        // se quiser, passe uma returnUrl custom:
+        // returnUrl: 'https://seuapp.com/retorno-assinatura'
+      );
+
+      if (url == null || url.isEmpty) {
+        _toast('Não foi possível criar o link de assinatura.');
+        return;
+      }
+
+      // Abra a página de webview do totem (defina a rota no seu módulo)
+      Modular.to.pushNamed('/totem/assinar-contrato', arguments: {'url': url});
+    } catch (e) {
+      _toast('Falha ao gerar/abrir contrato: $e');
+    } finally {
+      if (mounted) setState(() => _generating = false);
+    }
+  }
+
+  // Constrói uma VendaModel usando os dados do TotemStore
+  VendaModel _buildVendaFromTotem(PlanModel plan) {
+    // Se seu VendaModel tiver factory/copyWith diferentes, ajuste aqui.
+    return VendaModel(
+      plano: plan,
+      pessoaTitular: _totem.titular,
+      endereco: _totem.endereco,
+      dependentes: _totem.dependentes.toList(),
+      contatos: _totem.contatos.toList(),
+      pessoaResponsavelFinanceiro: _totem.responsavelFinanceiro,
     );
   }
+
+  // ======================
+  // PAGAMENTO (mesmo do arquivo anterior)
+  // ======================
 
   Future<void> _onPay(BuildContext context, BillingBreakdown billing) async {
     showModalBottomSheet(
@@ -217,10 +246,41 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
       builder: (_) => _PaymentSheet(billing: billing),
     );
   }
+
+  // ===== helpers =====
+
+  static String _fmtCurrency(dynamic v) {
+    if (v == null) return 'R\$ 0,00';
+    if (v is num) return _toCurrency(v);
+
+    if (v is String) {
+      final s = v.trim();
+      if (s.isEmpty) return 'R\$ 0,00';
+      if (s.contains('R\$')) return s;
+      final numeric = double.tryParse(s.replaceAll('.', '').replaceAll(',', '.'));
+      if (numeric != null) return _toCurrency(numeric);
+      return s;
+    }
+    return 'R\$ 0,00';
+  }
+
+  static String _toCurrency(num? v) {
+    final n = (v ?? 0) * 100;
+    final cents = n.round();
+    final s = (cents / 100).toStringAsFixed(2).replaceAll('.', ',');
+    return 'R\$ $s';
+  }
+
+  void _toast(String msg) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger
+      ?..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(msg)));
+  }
 }
 
 // ============================================================================
-// RESUMO (CARD)
+// RESUMO (CARD) — igual ao anterior, apenas mantido
 // ============================================================================
 
 class _SummaryCard extends StatelessWidget {
@@ -254,172 +314,146 @@ class _SummaryCard extends StatelessWidget {
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
               decoration: _glass(cs),
-              child: LayoutBuilder(
-                builder: (ctx, viewport) {
-                  final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
-                  return ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: viewport.maxHeight * 0.9,
-                    ),
-                    child: SingleChildScrollView(
-                      padding:
-                          EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Plano + Resumo de valores (seguindo BillingBreakdown)
-                          _Section(
-                            title: 'Plano',
-                            trailing: plan != null
-                                ? Chip(
-                                    label: Text(
-                                      plan.isAnnual ? 'Anual (-10%)' : 'Mensal',
-                                      style: TextStyle(
-                                          color: cs.onPrimaryContainer),
-                                    ),
-                                    backgroundColor: cs.primaryContainer,
-                                  )
-                                : null,
-                            child: plan == null
-                                ? const Text('Nenhum plano selecionado.')
-                                : Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '${plan.nomeContrato} • $vidas vida(s)',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleLarge
-                                            ?.copyWith(
-                                                fontWeight: FontWeight.bold),
-                                      ),
-                                      const SizedBox(height: 8),
-
-                                      // ------ Resumo de valores (como ResumoValoresCard) ------
-                                      if (billing == null)
-                                        const Text(
-                                            'Não foi possível calcular os valores.')
-                                      else
-                                        _ResumoValoresTotem(
-                                          b: billing!,
-                                          fmt: _fmt,
-                                        ),
-                                    ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 900),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _Section(
+                        title: 'Plano',
+                        trailing: plan != null
+                            ? Chip(
+                                label: Text(
+                                  plan.isAnnual ? 'Anual (-10%)' : 'Mensal',
+                                  style: TextStyle(color: cs.onPrimaryContainer),
+                                ),
+                                backgroundColor: cs.primaryContainer,
+                              )
+                            : null,
+                        child: plan == null
+                            ? const Text('Nenhum plano selecionado.')
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${plan.nomeContrato} • $vidas vida(s)',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(fontWeight: FontWeight.bold),
                                   ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Endereço
-                          _Section(
-                            title: 'Endereço',
-                            child: endereco == null
-                                ? const Text('Não informado')
-                                : _TwoCol(
-                                    left: [
-                                      _InfoRow('Logradouro',
-                                          endereco.logradouro ?? '-'),
-                                      _InfoRow('Bairro', endereco.bairro ?? '-'),
-                                      _InfoRow('CEP', endereco.cep ?? '-'),
-                                    ],
-                                    right: [
-                                      _InfoRow('Cidade', endereco.nomeCidade ?? '-'),
-                                      _InfoRow('UF', endereco.siglaUf ?? '-'),
-                                      _InfoRow('Número/Compl.',
-                                          '${endereco.numero ?? '-'}${(endereco.complemento?.isNotEmpty ?? false) ? ' — ${endereco.complemento}' : ''}'),
-                                    ],
-                                  ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Titular
-                          _Section(
-                            title: 'Titular',
-                            child: titular == null
-                                ? const Text('Não informado')
-                                : _TwoCol(
-                                    left: [
-                                      _InfoRow('Nome', titular.nome),
-                                      _InfoRow('CPF', titular.cpf ?? '-'),
-                                      _InfoRow('Nascimento',
-                                          titular.dataNascimento ?? '-'),
-                                    ],
-                                    right: [
-                                      if ((titular.cns ?? '').isNotEmpty)
-                                        _InfoRow('CNS', titular.cns!),
-                                      if ((titular.nomeMae ?? '').isNotEmpty)
-                                        _InfoRow('Mãe', titular.nomeMae!),
-                                    ],
-                                  ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Contatos
-                          _Section(
-                            title: 'Contatos',
-                            child: totem.contatos.isEmpty
-                                ? const Text('Nenhum contato informado')
-                                : Wrap(
-                                    spacing: 10,
-                                    runSpacing: 10,
-                                    children: totem.contatos
-                                        .map((c) => _ContactChip(c))
-                                        .toList(),
-                                  ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Responsável
-                          _Section(
-                            title: 'Responsável Financeiro',
-                            child: responsavel == null
-                                ? const Text('Não informado')
-                                : _TwoCol(
-                                    left: [
-                                      _InfoRow('Nome', responsavel.nome),
-                                      _InfoRow('CPF', responsavel.cpf ?? '-'),
-                                    ],
-                                    right: [
-                                      _InfoRow('Tipo',
-                                          (titular?.cpf ?? '') ==
-                                                  (responsavel.cpf ?? '')
-                                              ? 'O titular'
-                                              : 'Outra pessoa'),
-                                    ],
-                                  ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Dependentes
-                          _Section(
-                            title: 'Dependentes',
-                            child: totem.dependentes.isEmpty
-                                ? const Text('Nenhum')
-                                : Column(
-                                    children: [
-                                      ...List.generate(
-                                        totem.dependentes.length,
-                                        (i) {
-                                          final d = totem.dependentes[i];
-                                          final grau =
-                                              _grauDependenciaName(d.idGrauDependencia);
-                                          return ListTile(
-                                            contentPadding: EdgeInsets.zero,
-                                            leading: const Icon(Icons.person),
-                                            title: Text(d.nome),
-                                            subtitle: Text(
-                                                '${grau.isEmpty ? '—' : grau}${(d.cpf ?? '').isNotEmpty ? ' • CPF: ${d.cpf}' : ''}'),
-                                          );
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                          ),
-                        ],
+                                  const SizedBox(height: 8),
+                                  if (billing == null)
+                                    const Text('Não foi possível calcular os valores.')
+                                  else
+                                    _ResumoValoresTotem(b: billing!, fmt: _fmt),
+                                ],
+                              ),
                       ),
-                    ),
-                  );
-                },
+                      const SizedBox(height: 16),
+
+                      _Section(
+                        title: 'Endereço',
+                        child: endereco == null
+                            ? const Text('Não informado')
+                            : _TwoCol(
+                                left: [
+                                  _InfoRow('Logradouro', endereco.logradouro ?? '-'),
+                                  _InfoRow('Bairro', endereco.bairro ?? '-'),
+                                  _InfoRow('CEP', endereco.cep ?? '-'),
+                                ],
+                                right: [
+                                  _InfoRow('Cidade', endereco.nomeCidade ?? '-'),
+                                  _InfoRow('UF', endereco.siglaUf ?? '-'),
+                                  _InfoRow('Número/Compl.',
+                                      '${endereco.numero ?? '-'}${(endereco.complemento?.isNotEmpty ?? false) ? ' — ${endereco.complemento}' : ''}'),
+                                ],
+                              ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      _Section(
+                        title: 'Titular',
+                        child: titular == null
+                            ? const Text('Não informado')
+                            : _TwoCol(
+                                left: [
+                                  _InfoRow('Nome', titular.nome),
+                                  _InfoRow('CPF', titular.cpf ?? '-'),
+                                  _InfoRow('Nascimento', titular.dataNascimento ?? '-'),
+                                ],
+                                right: [
+                                  if ((titular.cns ?? '').isNotEmpty)
+                                    _InfoRow('CNS', titular.cns!),
+                                  if ((titular.nomeMae ?? '').isNotEmpty)
+                                    _InfoRow('Mãe', titular.nomeMae!),
+                                ],
+                              ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      _Section(
+                        title: 'Contatos',
+                        child: totem.contatos.isEmpty
+                            ? const Text('Nenhum contato informado')
+                            : Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: totem.contatos
+                                    .map((c) => _ContactChip(c))
+                                    .toList(),
+                              ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      _Section(
+                        title: 'Responsável Financeiro',
+                        child: responsavel == null
+                            ? const Text('Não informado')
+                            : _TwoCol(
+                                left: [
+                                  _InfoRow('Nome', responsavel.nome),
+                                  _InfoRow('CPF', responsavel.cpf ?? '-'),
+                                ],
+                                right: [
+                                  _InfoRow(
+                                    'Tipo',
+                                    (titular?.cpf ?? '') == (responsavel.cpf ?? '')
+                                        ? 'O titular'
+                                        : 'Outra pessoa',
+                                  ),
+                                ],
+                              ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      _Section(
+                        title: 'Dependentes',
+                        child: totem.dependentes.isEmpty
+                            ? const Text('Nenhum')
+                            : Column(
+                                children: [
+                                  ...List.generate(totem.dependentes.length, (i) {
+                                    final d = totem.dependentes[i];
+                                    final grau = _grauDependenciaName(d.idGrauDependencia);
+                                    return ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: const Icon(Icons.person),
+                                      title: Text(d.nome),
+                                      subtitle: Text(
+                                        '${grau.isEmpty ? '—' : grau}'
+                                        '${(d.cpf ?? '').isNotEmpty ? ' • CPF: ${d.cpf}' : ''}',
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -443,8 +477,8 @@ class _SummaryCard extends StatelessWidget {
 
   String _grauDependenciaName(int? id) {
     var list = [
-      GenericStateModel(name: 'BENEFICIÁRIO', id: 1),
-       GenericStateModel(name: 'CÔNJUGE/COMPANHEIRO', id: 2),
+       GenericStateModel(name: 'BENEFICIÁRIO', id: 1),
+      GenericStateModel(name: 'CÔNJUGE/COMPANHEIRO', id: 2),
        GenericStateModel(name: 'FILHO/FILHA', id: 3),
        GenericStateModel(name: 'PAI/MÃE/SOGRO/SOGRA', id: 5),
        GenericStateModel(name: 'AGREGADOS/OUTROS', id: 6),
@@ -458,8 +492,7 @@ class _SummaryCard extends StatelessWidget {
 }
 
 // -----------------------------------------------------------------
-// Bloco que replica fielmente a apresentação do ResumoValoresCard,
-// mas usando o BillingBreakdown já calculado.
+// Resumo de valores (usa BillingBreakdown exatamente como no módulo)
 // -----------------------------------------------------------------
 class _ResumoValoresTotem extends StatelessWidget {
   const _ResumoValoresTotem({required this.b, required this.fmt});
@@ -490,7 +523,6 @@ class _ResumoValoresTotem extends StatelessWidget {
 
         const Divider(height: 20),
 
-        // ESTE é o valor que vai para o Celcoin:
         _totalRow(
           context,
           b.kind == BillingKind.mensal ? 'Total 1ª cobrança' : 'Total 1º ciclo (à vista)',
@@ -541,10 +573,8 @@ class _ResumoValoresTotem extends StatelessWidget {
 }
 
 // ============================================================================
-// BOTTOM SHEET DE PAGAMENTO (usa BillingBreakdown.valorAgora)
+// BOTTOM SHEET DE PAGAMENTO (igual ao anterior)
 // ============================================================================
-
-enum _PayMethod { pix, card, boleto }
 
 class _PaymentSheet extends StatefulWidget {
   const _PaymentSheet({required this.billing});
@@ -557,7 +587,7 @@ class _PaymentSheet extends StatefulWidget {
 class _PaymentSheetState extends State<_PaymentSheet> {
   _PayMethod? _method;
   bool _processing = false;
-  String? _pixCode; // exemplo de "copia e cola"
+  String? _pixCode;
 
   double get _amount => widget.billing.valorAgora;
 
@@ -566,32 +596,20 @@ class _PaymentSheetState extends State<_PaymentSheet> {
   Future<void> _startPayment() async {
     if (_method == null) return;
     setState(() => _processing = true);
-
-    await Future.delayed(const Duration(milliseconds: 600)); // micro feedback
-
+    await Future.delayed(const Duration(milliseconds: 600));
     try {
       switch (_method!) {
         case _PayMethod.pix:
-          // TODO: integrar com seu gateway para criar charge PIX com _amount (billing.valorAgora)
           setState(() {
-            _pixCode =
-                '0002010102122687BR.GOV.BCB.PIX...5408${_amount.toStringAsFixed(2)}...'; // mock
+            _pixCode = '000201010212...5408${_amount.toStringAsFixed(2)}...'; // mock
           });
           break;
         case _PayMethod.card:
-          // TODO: acionar pinpad/TEF/SDK do adquirente com _amount
           _showDone('Pagamento via cartão iniciado (exemplo).');
           break;
         case _PayMethod.boleto:
-          // TODO: gerar boleto com _amount
           _showDone('Boleto gerado (exemplo).');
           break;
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Falha no pagamento: $e')),
-        );
       }
     } finally {
       if (mounted) setState(() => _processing = false);
@@ -674,8 +692,6 @@ class _PaymentSheetState extends State<_PaymentSheet> {
             style: TextStyle(color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 16),
-
-          // Conteúdo dinâmico por método
           if (_method == _PayMethod.pix && _pixCode != null) ...[
             const SizedBox(height: 8),
             Container(
@@ -697,7 +713,6 @@ class _PaymentSheetState extends State<_PaymentSheet> {
             ),
             const SizedBox(height: 8),
           ],
-
           Row(
             children: [
               Expanded(
@@ -797,10 +812,6 @@ class _PayTile extends StatelessWidget {
     );
   }
 }
-
-// ============================================================================
-// PEÇAS DE UI
-// ============================================================================
 
 class _Section extends StatelessWidget {
   const _Section({required this.title, required this.child, this.trailing});
@@ -912,10 +923,7 @@ class _ContactChip extends StatelessWidget {
   }
 }
 
-// ============================================================================
-// FUNDO ANIMADO
-// ============================================================================
-
+// ===== Fundo animado (mesmo estilo) =====
 class _AnimatedBlobBackground extends StatefulWidget {
   const _AnimatedBlobBackground();
 
