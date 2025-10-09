@@ -789,7 +789,7 @@ class _ClientFormPageState extends State<ClientFormPage> {
       filter: {'#': RegExp(r'\d')},
     );
     final phoneMask10 = MaskTextInputFormatter(
-      mask: '(##) ####-####',
+      mask: '(##) ####-#####',
       filter: {'#': RegExp(r'\d')},
     );
 
