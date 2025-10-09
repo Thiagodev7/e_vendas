@@ -58,7 +58,7 @@ BillingBreakdown computeBilling(PlanModel plan, {DateTime? now}) {
 
   final today = now ?? DateTime.now();
   final monthDays = DateUtils.getDaysInMonth(today.year, today.month);
-  final remainingDays = (monthDays - today.day + 1).clamp(0, monthDays);
+  final remainingDays = (monthDays - today.day ).clamp(0, monthDays);
   final fraction = (remainingDays / monthDays).clamp(0.0, 1.0);
   final prorata = mensal * fraction;
 

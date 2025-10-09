@@ -42,10 +42,10 @@ class _ClientFormPageState extends State<ClientFormPage> {
   GenericStateModel? estadoCivilTitular;
 
   @override
-void initState() {
-  super.initState();
-  carregarVendaExistente();
-}
+  void initState() {
+    super.initState();
+    carregarVendaExistente();
+  }
 
   @override
   void dispose() {
@@ -58,45 +58,45 @@ void initState() {
 
   void carregarVendaExistente() {
     if (widget.selectedPlan == null) return;
-  if (widget.vendaIndex == null) return;
+    if (widget.vendaIndex == null) return;
 
-  final venda = salesStore.vendas[widget.vendaIndex!];
+    final venda = salesStore.vendas[widget.vendaIndex!];
 
-  // Titular
-  if (venda.pessoaTitular != null) {
-    store.titular = venda.pessoaTitular;
-    cpfController.text = venda.pessoaTitular!.cpf ?? '';
-    estadoCivilTitular = store.estadoCivilList.firstWhere(
-      (e) => e.id == venda.pessoaTitular!.idEstadoCivil,
-      orElse: () => store.estadoCivilList.first,
-    );
+    // Titular
+    if (venda.pessoaTitular != null) {
+      store.titular = venda.pessoaTitular;
+      cpfController.text = venda.pessoaTitular!.cpf ?? '';
+      estadoCivilTitular = store.estadoCivilList.firstWhere(
+        (e) => e.id == venda.pessoaTitular!.idEstadoCivil,
+        orElse: () => store.estadoCivilList.first,
+      );
+    }
+
+    // Endereço
+    if (venda.endereco != null) {
+      store.endereco = venda.endereco;
+      cepController.text = venda.endereco!.cep ?? '';
+      numeroController.text = venda.endereco!.numero.toString() ?? '';
+      complementoController.text = venda.endereco!.complemento ?? '';
+    }
+
+    // Responsável Financeiro
+    if (venda.pessoaResponsavelFinanceiro != null) {
+      store.responsavelFinanceiro = venda.pessoaResponsavelFinanceiro;
+    }
+
+    // Dependentes
+    if (venda.dependentes != null && venda.dependentes!.isNotEmpty) {
+      store.dependentes.clear();
+      store.dependentes.addAll(venda.dependentes!);
+    }
+
+    // Contatos
+    if (venda.contatos != null && venda.contatos!.isNotEmpty) {
+      store.contatos.clear();
+      store.contatos.addAll(venda.contatos!);
+    }
   }
-
-  // Endereço
-  if (venda.endereco != null) {
-    store.endereco = venda.endereco;
-    cepController.text = venda.endereco!.cep ?? '';
-    numeroController.text = venda.endereco!.numero.toString() ?? '';
-    complementoController.text = venda.endereco!.complemento ?? '';
-  }
-
-  // Responsável Financeiro
-  if (venda.pessoaResponsavelFinanceiro != null) {
-    store.responsavelFinanceiro = venda.pessoaResponsavelFinanceiro;
-  }
-
-  // Dependentes
-  if (venda.dependentes != null && venda.dependentes!.isNotEmpty) {
-    store.dependentes.clear();
-    store.dependentes.addAll(venda.dependentes!);
-  }
-
-  // Contatos
-  if (venda.contatos != null && venda.contatos!.isNotEmpty) {
-    store.contatos.clear();
-    store.contatos.addAll(venda.contatos!);
-  }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -204,6 +204,27 @@ void initState() {
         },
       ),
     );
+  }
+
+  String _digits(String? s) => (s ?? '').replaceAll(RegExp(r'\D'), '');
+
+  bool _isPhoneType(GenericStateModel? t) {
+    final n = (t?.name ?? '').toLowerCase();
+    return n.contains('telefone') ||
+        n.contains('celular') ||
+        n.contains('whats') ||
+        n.contains('phone');
+  }
+
+  String? _formatBrPhone(String digits) {
+    // 10 dígitos: (DD) XXXX-XXXX | 11 dígitos: (DD) XXXXX-XXXX
+    if (digits.length == 10) {
+      return '(${digits.substring(0, 2)}) ${digits.substring(2, 6)}-${digits.substring(6)}';
+    }
+    if (digits.length == 11) {
+      return '(${digits.substring(0, 2)}) ${digits.substring(2, 7)}-${digits.substring(7)}';
+    }
+    return null;
   }
 
   // Plano Selecionado
@@ -428,8 +449,7 @@ void initState() {
                 }
 
                 // Pega o plano (se existir)
-                PlanModel? plan =
-                    widget.selectedPlan;
+                PlanModel? plan = widget.selectedPlan;
 
                 if (widget.vendaIndex == null) {
                   // Nova venda
@@ -456,29 +476,29 @@ void initState() {
   }
 
   Future<void> _salvarDadosVenda(int index) async {
-  // Atualiza os campos alterados manualmente
-  store.titular = store.titular!.copyWith(
-    idEstadoCivil: estadoCivilTitular?.id,
-  );
+    // Atualiza os campos alterados manualmente
+    store.titular = store.titular!.copyWith(
+      idEstadoCivil: estadoCivilTitular?.id,
+    );
 
-  store.endereco = store.endereco!.copyWith(
-    numero: numeroController.text.isNotEmpty
-        ? int.tryParse(numeroController.text)
-        : null,
-    complemento: complementoController.text,
-  );
+    store.endereco = store.endereco!.copyWith(
+      numero: numeroController.text.isNotEmpty
+          ? int.tryParse(numeroController.text)
+          : null,
+      complemento: complementoController.text,
+    );
 
-  // Salva
-  await salesStore.atualizarTitular(index, store.titular!);
-  await salesStore.atualizarEndereco(index, store.endereco!);
-  await salesStore.atualizarDependentes(index, store.dependentes.toList());
-  await salesStore.atualizarContatos(index, store.contatos.toList());
+    // Salva
+    await salesStore.atualizarTitular(index, store.titular!);
+    await salesStore.atualizarEndereco(index, store.endereco!);
+    await salesStore.atualizarDependentes(index, store.dependentes.toList());
+    await salesStore.atualizarContatos(index, store.contatos.toList());
 
-  if (store.responsavelFinanceiro != null) {
-    await salesStore.atualizarResponsavelFinanceiro(
-        index, store.responsavelFinanceiro!);
+    if (store.responsavelFinanceiro != null) {
+      await salesStore.atualizarResponsavelFinanceiro(
+          index, store.responsavelFinanceiro!);
+    }
   }
-}
 
   // Campos e cards
   Widget _buildCpfField() {
@@ -763,11 +783,34 @@ void initState() {
     final nomeController = TextEditingController();
     GenericStateModel? tipoContatoSelecionado;
 
+    // máscaras para telefone (fixo e celular)
+    final phoneMask11 = MaskTextInputFormatter(
+      mask: '(##) #####-####',
+      filter: {'#': RegExp(r'\d')},
+    );
+    final phoneMask10 = MaskTextInputFormatter(
+      mask: '(##) ####-####',
+      filter: {'#': RegExp(r'\d')},
+    );
+
+    // máscara atual aplicada no campo de descrição (vai mudar conforme o tipo)
+    MaskTextInputFormatter? currentMask;
+
     showDialog(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            // atualiza máscara quando o tipo muda
+            void _updateMask() {
+              if (_isPhoneType(tipoContatoSelecionado)) {
+                // começa com celular (11). Se o usuário digitar 10, a gente revalida
+                currentMask = phoneMask11;
+              } else {
+                currentMask = null; // sem máscara para email/outros
+              }
+            }
+
             return AlertDialog(
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
@@ -783,17 +826,89 @@ void initState() {
                       items: store.contactTypes.map((e) {
                         return DropdownMenuItem(value: e, child: Text(e.name));
                       }).toList(),
-                      onChanged: (val) =>
-                          setModalState(() => tipoContatoSelecionado = val),
+                      onChanged: (val) {
+                        setModalState(() {
+                          tipoContatoSelecionado = val;
+                          _updateMask();
+                          // limpa formatações anteriores quando troca tipo
+                          descricaoController.clear();
+                          phoneMask10.clear();
+                          phoneMask11.clear();
+                        });
+                      },
                       validator: (value) => value == null || value.id == 0
                           ? 'Selecione o tipo'
                           : null,
                     );
                   }),
                   const SizedBox(height: 12),
-                  _buildTextField('Descrição', descricaoController,
-                      keyboardType: TextInputType.text),
-                  _buildTextField('Nome do Contato', nomeController),
+
+                  // Campo descrição com máscara dinâmica quando for telefone
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TextFormField(
+                      controller: descricaoController,
+                      decoration: const InputDecoration(
+                        labelText: 'Descrição',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: _isPhoneType(tipoContatoSelecionado)
+                          ? TextInputType.phone
+                          : TextInputType.text,
+                      inputFormatters: _isPhoneType(tipoContatoSelecionado)
+                          ? [currentMask!]
+                          : null,
+                      onChanged: (val) {
+                        if (_isPhoneType(tipoContatoSelecionado)) {
+                          // troca de máscara conforme 10/11 dígitos
+                          final d = _digits(val);
+                          final wants11 = d.length >= 11;
+                          final is11Applied =
+                              identical(currentMask, phoneMask11);
+                          if (wants11 && !is11Applied) {
+                            // migra para 11 dígitos
+                            final raw = _digits(descricaoController.text);
+                            setModalState(() {
+                              currentMask = phoneMask11;
+                              phoneMask11.clear();
+                              descricaoController.text =
+                                  phoneMask11.maskText(raw);
+                              descricaoController.selection =
+                                  TextSelection.fromPosition(
+                                TextPosition(
+                                    offset: descricaoController.text.length),
+                              );
+                            });
+                          } else if (!wants11 && is11Applied) {
+                            // volta para 10 dígitos
+                            final raw = _digits(descricaoController.text);
+                            setModalState(() {
+                              currentMask = phoneMask10;
+                              phoneMask10.clear();
+                              descricaoController.text =
+                                  phoneMask10.maskText(raw);
+                              descricaoController.selection =
+                                  TextSelection.fromPosition(
+                                TextPosition(
+                                    offset: descricaoController.text.length),
+                              );
+                            });
+                          }
+                        }
+                      },
+                    ),
+                  ),
+
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TextFormField(
+                      controller: nomeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nome do Contato',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
                 ],
               ),
               actions: [
@@ -802,12 +917,33 @@ void initState() {
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary),
                   onPressed: () {
                     if (tipoContatoSelecionado == null ||
                         tipoContatoSelecionado!.id == 0) {
                       _showSnackBar('Selecione o tipo de contato', Colors.red);
                       return;
                     }
+
+                    // ✅ Regra: se for telefone, exigir DDD (10 ou 11 dígitos)
+                    if (_isPhoneType(tipoContatoSelecionado)) {
+                      final digits = _digits(descricaoController.text);
+
+                      if (digits.length < 10 || digits.length > 11) {
+                        _showSnackBar(
+                          'Telefone inválido. Inclua DDD. Ex: (62) 98158-0544',
+                          Colors.red,
+                        );
+                        return;
+                      }
+
+                      // formata bonitinho antes de salvar
+                      final formatted =
+                          _formatBrPhone(digits) ?? descricaoController.text;
+                      descricaoController.text = formatted;
+                    }
+
                     store.adicionarContato(
                       ContatoModel(
                         idMeioComunicacao: tipoContatoSelecionado!.id,
@@ -817,9 +953,6 @@ void initState() {
                     );
                     Navigator.pop(ctx);
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                  ),
                   child: const Text('Salvar'),
                 ),
               ],

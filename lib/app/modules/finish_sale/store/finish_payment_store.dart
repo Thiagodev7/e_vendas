@@ -329,10 +329,14 @@ Future<PaymentStatus> consultarStatusPagamento() async {
   }
 
   String? _pickPhone(List<ContatoModel> contatos) {
-    for (final c in contatos) {
-      final digits = _digits(c.descricao);
-      if (digits.length >= 10) return digits;
+  for (final c in contatos) {
+    final digits = _digits(c.descricao); // limpa tudo que não é número
+
+    // ✅ Verifica se sobrou apenas números e tem tamanho suficiente
+    if (digits.isNotEmpty && RegExp(r'^\d+$').hasMatch(digits) && digits.length >= 8) {
+      return digits;
     }
-    return null;
   }
+  return null;
+}
 }
