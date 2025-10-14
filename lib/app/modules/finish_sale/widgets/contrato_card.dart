@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -20,19 +21,21 @@ class ContratoCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Observer(builder: (_) {
           final contractStore = Modular.get<FinishContractStore>();
-          final paymentStore  = Modular.get<FinishPaymentStore>();
+          final paymentStore = Modular.get<FinishPaymentStore>();
 
           final plan = paymentStore.venda?.plano;
 
-          final dynamic monthlyRaw    = plan?.getMensalidade()    ?? plan?.getMensalidadeTotal();
-          final dynamic enrollmentRaw = plan?.getTaxaAdesao()     ?? plan?.getTaxaAdesaoTotal();
+          final dynamic monthlyRaw =
+              plan?.getMensalidade() ?? plan?.getMensalidadeTotal();
+          final dynamic enrollmentRaw =
+              plan?.getTaxaAdesao() ?? plan?.getTaxaAdesaoTotal();
 
-          final monthlyFmt    = _fmtCurrency(monthlyRaw);
+          final monthlyFmt = _fmtCurrency(monthlyRaw);
           final enrollmentFmt = _fmtCurrency(enrollmentRaw);
 
-          final contratoGerado   = contractStore.contratoGerado;
+          final contratoGerado = contractStore.contratoGerado;
           final contratoAssinado = contractStore.contratoAssinadoServer;
-          final envelopeId       = contractStore.contratoEnvelopeId;
+          final envelopeId = contractStore.contratoEnvelopeId;
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,12 +76,15 @@ class ContratoCard extends StatelessWidget {
 
                   // Atualiza flags por nroProposta
                   OutlinedButton.icon(
-                    onPressed: (contractStore.checking || contractStore.loading || contractStore.nroProposta == null)
+                    onPressed: (contractStore.checking ||
+                            contractStore.loading ||
+                            contractStore.nroProposta == null)
                         ? null
                         : () async {
                             final flags = await contractStore.syncFlags();
                             if (flags != null) {
-                              paymentStore.pagamentoConcluidoServer = flags.pagamentoConcluido;
+                              paymentStore.pagamentoConcluidoServer =
+                                  flags.pagamentoConcluido;
                             }
                             final msg = (flags == null)
                                 ? 'Não foi possível atualizar agora.'
@@ -88,7 +94,10 @@ class ContratoCard extends StatelessWidget {
                             _toast(context, 'Status atualizado • $msg');
                           },
                     icon: contractStore.checking
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.sync),
                     label: const Text('Atualizar status'),
                   ),
@@ -102,49 +111,54 @@ class ContratoCard extends StatelessWidget {
                 children: [
                   // Assinar agora (Recipient View)
                   OutlinedButton.icon(
-                    onPressed: (envelopeId == null || envelopeId.isEmpty || contractStore.loading)
+                    onPressed: (envelopeId == null ||
+                            envelopeId.isEmpty ||
+                            contractStore.loading)
                         ? null
                         : () async {
                             try {
                               final url = await contractStore.criarRecipientViewUrl(
-                                // opcional: passe uma returnUrl custom se quiser
-                                // returnUrl: 'https://seu-app.com/pos-assinatura'
-                              );
+                                  // opcional: returnUrl
+                                  // returnUrl: 'https://seu-app.com/pos-assinatura'
+                                  );
                               if (url == null) {
-                                _toast(context, 'Não foi possível criar o link de assinatura.');
+                                _toast(context,
+                                    'Não foi possível gerar o link do contrato.');
                                 return;
                               }
-                              final uri = Uri.parse(url);
-                              if (await canLaunchUrl(uri)) {
-                                await launchUrl(uri, mode: LaunchMode.externalApplication);
-                              } else {
-                                _toast(context, 'Falha ao abrir a URL de assinatura.');
-                              }
+                              await _showLinkDialog(
+                                  context, url); // <- mostra em vez de abrir
                             } catch (e) {
-                              _toast(context, 'Erro ao abrir assinatura: $e');
+                              _toast(context, 'Erro ao gerar link: $e');
                             }
                           },
-                    icon: const Icon(Icons.draw_rounded),
-                    label: const Text('Assinar agora (embutido)'),
+                    icon: const Icon(Icons.link),
+                    label: const Text('Link do contrato'),
                   ),
                   const SizedBox(width: 8),
 
                   // Abrir Console DocuSign
                   OutlinedButton.icon(
-                    onPressed: (envelopeId == null || envelopeId.isEmpty || contractStore.loading)
+                    onPressed: (envelopeId == null ||
+                            envelopeId.isEmpty ||
+                            contractStore.loading)
                         ? null
                         : () async {
                             try {
-                              final url = await contractStore.criarConsoleViewUrl();
+                              final url =
+                                  await contractStore.criarConsoleViewUrl();
                               if (url == null) {
-                                _toast(context, 'Não foi possível criar o Console View.');
+                                _toast(context,
+                                    'Não foi possível criar o Console View.');
                                 return;
                               }
                               final uri = Uri.parse(url);
                               if (await canLaunchUrl(uri)) {
-                                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                await launchUrl(uri,
+                                    mode: LaunchMode.externalApplication);
                               } else {
-                                _toast(context, 'Falha ao abrir o Console DocuSign.');
+                                _toast(context,
+                                    'Falha ao abrir o Console DocuSign.');
                               }
                             } catch (e) {
                               _toast(context, 'Erro ao abrir console: $e');
@@ -167,9 +181,11 @@ class ContratoCard extends StatelessWidget {
                             }
                             final uri = Uri.parse(url);
                             if (await canLaunchUrl(uri)) {
-                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                              await launchUrl(uri,
+                                  mode: LaunchMode.externalApplication);
                             } else {
-                              _toast(context, 'Falha ao abrir o PDF do envelope.');
+                              _toast(
+                                  context, 'Falha ao abrir o PDF do envelope.');
                             }
                           },
                     icon: const Icon(Icons.picture_as_pdf_rounded),
@@ -190,7 +206,9 @@ class ContratoCard extends StatelessWidget {
                     ok: contratoAssinado,
                     labelOk: 'Assinado',
                     labelKo: 'Pendente',
-                    icon: contratoAssinado ? Icons.verified : Icons.hourglass_bottom_rounded,
+                    icon: contratoAssinado
+                        ? Icons.verified
+                        : Icons.hourglass_bottom_rounded,
                     cs: cs,
                   ),
                   if (envelopeId != null)
@@ -200,7 +218,8 @@ class ContratoCard extends StatelessWidget {
                         if (url == null) return;
                         final uri = Uri.parse(url);
                         if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          await launchUrl(uri,
+                              mode: LaunchMode.externalApplication);
                         }
                       },
                       child: Chip(
@@ -235,7 +254,8 @@ class ContratoCard extends StatelessWidget {
       if (s.isEmpty) return 'R\$ 0,00';
       if (s.contains('R\$')) return s; // já formatado
 
-      final numeric = double.tryParse(s.replaceAll('.', '').replaceAll(',', '.'));
+      final numeric =
+          double.tryParse(s.replaceAll('.', '').replaceAll(',', '.'));
       if (numeric != null) return _toCurrency(numeric);
 
       return s; // fallback: devolve como veio
@@ -287,7 +307,35 @@ class ContratoCard extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             ok ? labelOk : labelKo,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fg),
+            style:
+                TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fg),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showLinkDialog(BuildContext context, String url) async {
+    if (!context.mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Link do contrato'),
+        content: SelectableText(url, style: const TextStyle(fontSize: 14)),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: url));
+              if (context.mounted) {
+                Navigator.of(ctx).pop();
+                _toast(context, 'Link copiado para a área de transferência');
+              }
+            },
+            child: const Text('Copiar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Fechar'),
           ),
         ],
       ),
