@@ -124,7 +124,8 @@ class VendaModel {
     }
 
     final nro = json['nroProposta'];
-    final int? nroProp = (nro is int) ? nro : int.tryParse(nro?.toString() ?? '');
+    final int? nroProp =
+        (nro is int) ? nro : int.tryParse(nro?.toString() ?? '');
 
     return VendaModel(
       pessoaTitular: json['pessoaTitular'] != null
@@ -171,7 +172,8 @@ class VendaModel {
     }
 
     final dependentesList = (json['dependentes'] as List<dynamic>?)
-        ?.map((depJson) => PessoaModel.fromJson(depJson as Map<String, dynamic>))
+        ?.map(
+            (depJson) => PessoaModel.fromJson(depJson as Map<String, dynamic>))
         .toList();
 
     final contatosList = (json['contatos'] as List<dynamic>?)
@@ -188,14 +190,19 @@ class VendaModel {
         (rawNro is int) ? rawNro : int.tryParse(rawNro?.toString() ?? '');
 
     // gateway_pagamento_id: aceita snake_case ou camelCase; sempre convertemos para String
-    final String? gwId =
-        _toStringOrNull(json['gateway_pagamento_id'] ?? json['gatewayPagamentoId']);
+    final String? gwId = _toStringOrNull(
+        json['gateway_pagamento_id'] ?? json['gatewayPagamentoId']);
 
     // Suportar tanto "pessoaTitular" quanto "pessoatitular"
-    final titularJson =
-        (json['pessoaTitular'] ?? json['pessoatitular']) as Map<String, dynamic>?;
-    final respFinJson =
-        json['pessoaResponsavelFinanceiro'] as Map<String, dynamic>?;
+    final titularJson = (json['pessoaTitular'] ?? json['pessoatitular'])
+        as Map<String, dynamic>?;
+    final Map<String, dynamic>? respFinJson = (json[
+                'pessoaResponsavelFinanceiro'] ??
+            json['pessoaresponsavelfinanceiro'] ?? // ⬅️ forma do seu backend
+            json[
+                'responsavel_financeiro'] ?? // ⬅️ caso o back mude pra snake_case
+            json['responsavelfinanceiro']) // ⬅️ variações comuns
+        as Map<String, dynamic>?;
 
     final parcial = VendaModel(
       pessoaTitular:
