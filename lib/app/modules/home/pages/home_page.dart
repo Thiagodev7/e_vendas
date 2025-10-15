@@ -1,3 +1,4 @@
+import 'package:e_vendas/app/core/stores/global_store.dart';
 import 'package:e_vendas/app/modules/home/widgets/recent_sales_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -17,6 +18,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final store = Modular.get<HomeStore>();
+  final global = Modular.get<GlobalStore>();
 
   @override
   void initState() {
@@ -46,7 +48,7 @@ class _HomePageState extends State<HomePage> {
                           children: [
                             Expanded(child: _buildMetricsGrid()),
                             const SizedBox(width: 24),
-                            Expanded(child: RecentSalesCard(vendedorId: 12, limit: 8),),
+                            Expanded(child: RecentSalesCard(vendedorId: global.vendedor?['id'], limit: 8),),
                           ],
                         )
                       : ListView(
@@ -54,7 +56,7 @@ class _HomePageState extends State<HomePage> {
                             _buildMetricsGrid(),
                             const SizedBox(height: 24),
                             // exemplo dentro do grid/coluna
-                            const RecentSalesCard(vendedorId: 12, limit: 8),
+                            RecentSalesCard(vendedorId: global.vendedor?['id'] , limit: 8),
                           ],
                         ),
                 ),

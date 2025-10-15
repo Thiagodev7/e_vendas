@@ -265,11 +265,11 @@ class ContratoCard extends StatelessWidget {
   }
 
   static String _toCurrency(num? v) {
-    final n = (v ?? 0) * 100;
-    final cents = n.round();
-    final s = (cents / 100).toStringAsFixed(2).replaceAll('.', ',');
-    return 'R\$ $s';
-  }
+  final n = (v ?? 0); // ✅ não multiplica
+  final cents = n.round();
+  final s = (cents / 100).toStringAsFixed(2).replaceAll('.', ',');
+  return 'R\$ $s';
+}
 
   static String _short(String s) {
     if (s.length <= 12) return s;
