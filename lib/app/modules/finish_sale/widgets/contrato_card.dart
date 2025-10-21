@@ -13,10 +13,12 @@ class ContratoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Observer(builder: (_) {
@@ -33,175 +35,31 @@ class ContratoCard extends StatelessWidget {
           final monthlyFmt = _fmtCurrency(monthlyRaw);
           final enrollmentFmt = _fmtCurrency(enrollmentRaw);
 
-          final contratoGerado = contractStore.contratoGerado;
           final contratoAssinado = contractStore.contratoAssinadoServer;
           final envelopeId = contractStore.contratoEnvelopeId;
+          final hasEnvelope = envelopeId != null && envelopeId.isNotEmpty;
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ---------- Cabeçalho ----------
               Row(
                 children: [
-                  FilledButton.icon(
-                    onPressed: (!contractStore.podeDispararContrato)
-                        ? null
-                        : () async {
-                            try {
-                              await contractStore.gerarContrato(
-                                enrollmentFmt: enrollmentFmt,
-                                monthlyFmt: monthlyFmt,
-                              );
-                              _toast(context, 'Contrato gerado!');
-                            } catch (e) {
-                              _toast(context, 'Falha ao gerar contrato: $e');
-                            }
-                          },
-                    icon: const Icon(Icons.description_outlined),
-                    label: const Text('Gerar contrato'),
-                  ),
-                  const SizedBox(width: 8),
-                  if (contratoGerado)
-                    Chip(
-                      label: const Text('Gerado'),
-                      backgroundColor: cs.surface,
-                      side: BorderSide(color: cs.outlineVariant),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: cs.secondaryContainer,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  if (!contractStore.podeDispararContrato && !contratoAssinado)
-                    Chip(
-                      label: const Text('Aguardando…'),
-                      backgroundColor: cs.surface,
-                      side: BorderSide(color: cs.outlineVariant),
-                    ),
-                  const SizedBox(width: 8),
-
-                  // Atualiza flags por nroProposta
-                  OutlinedButton.icon(
-                    onPressed: (contractStore.checking ||
-                            contractStore.loading ||
-                            contractStore.nroProposta == null)
-                        ? null
-                        : () async {
-                            final flags = await contractStore.syncFlags();
-                            if (flags != null) {
-                              paymentStore.pagamentoConcluidoServer =
-                                  flags.pagamentoConcluido;
-                            }
-                            final msg = (flags == null)
-                                ? 'Não foi possível atualizar agora.'
-                                : (flags.contratoAssinado
-                                    ? 'Contrato assinado.'
-                                    : 'Contrato ainda pendente.');
-                            _toast(context, 'Status atualizado • $msg');
-                          },
-                    icon: contractStore.checking
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.sync),
-                    label: const Text('Atualizar status'),
+                    child: Icon(Icons.description_outlined,
+                        color: cs.onSecondaryContainer),
                   ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // ======= NOVA LINHA DE AÇÕES =========
-              Row(
-                children: [
-                  // Assinar agora (Recipient View)
-                  OutlinedButton.icon(
-                    onPressed: (envelopeId == null ||
-                            envelopeId.isEmpty ||
-                            contractStore.loading)
-                        ? null
-                        : () async {
-                            try {
-                              final url = await contractStore.criarRecipientViewUrl(
-                                  // opcional: returnUrl
-                                  // returnUrl: 'https://seu-app.com/pos-assinatura'
-                                  );
-                              if (url == null) {
-                                _toast(context,
-                                    'Não foi possível gerar o link do contrato.');
-                                return;
-                              }
-                              await _showLinkDialog(
-                                  context, url); // <- mostra em vez de abrir
-                            } catch (e) {
-                              _toast(context, 'Erro ao gerar link: $e');
-                            }
-                          },
-                    icon: const Icon(Icons.link),
-                    label: const Text('Link do contrato'),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // Abrir Console DocuSign
-                  OutlinedButton.icon(
-                    onPressed: (envelopeId == null ||
-                            envelopeId.isEmpty ||
-                            contractStore.loading)
-                        ? null
-                        : () async {
-                            try {
-                              final url =
-                                  await contractStore.criarConsoleViewUrl();
-                              if (url == null) {
-                                _toast(context,
-                                    'Não foi possível criar o Console View.');
-                                return;
-                              }
-                              final uri = Uri.parse(url);
-                              if (await canLaunchUrl(uri)) {
-                                await launchUrl(uri,
-                                    mode: LaunchMode.externalApplication);
-                              } else {
-                                _toast(context,
-                                    'Falha ao abrir o Console DocuSign.');
-                              }
-                            } catch (e) {
-                              _toast(context, 'Erro ao abrir console: $e');
-                            }
-                          },
-                    icon: const Icon(Icons.open_in_new_rounded),
-                    label: const Text('Abrir no DocuSign'),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // Ver PDF
-                  OutlinedButton.icon(
-                    onPressed: (envelopeId == null || envelopeId.isEmpty)
-                        ? null
-                        : () async {
-                            final url = contractStore.getEnvelopePdfUrl();
-                            if (url == null) {
-                              _toast(context, 'URL do PDF indisponível.');
-                              return;
-                            }
-                            final uri = Uri.parse(url);
-                            if (await canLaunchUrl(uri)) {
-                              await launchUrl(uri,
-                                  mode: LaunchMode.externalApplication);
-                            } else {
-                              _toast(
-                                  context, 'Falha ao abrir o PDF do envelope.');
-                            }
-                          },
-                    icon: const Icon(Icons.picture_as_pdf_rounded),
-                    label: const Text('Ver PDF'),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // ===== badges/infos =====
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 12,
-                runSpacing: 8,
-                children: [
+                  const SizedBox(width: 12),
+                  Text('Contrato',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      )),
+                  const Spacer(),
                   _statusPill(
                     ok: contratoAssinado,
                     labelOk: 'Assinado',
@@ -211,29 +69,159 @@ class ContratoCard extends StatelessWidget {
                         : Icons.hourglass_bottom_rounded,
                     cs: cs,
                   ),
-                  if (envelopeId != null)
-                    InkWell(
-                      onTap: () async {
-                        final url = contractStore.getEnvelopePdfUrl();
-                        if (url == null) return;
-                        final uri = Uri.parse(url);
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri,
-                              mode: LaunchMode.externalApplication);
-                        }
-                      },
-                      child: Chip(
-                        label: Text('Envelope: ${_short(envelopeId)}'),
-                        backgroundColor: cs.surface,
-                        side: BorderSide(color: cs.outlineVariant),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+
+              // ---------- Linha de ações ----------
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: (!contractStore.podeDispararContrato)
+                          ? null
+                          : () async {
+                              try {
+                                await contractStore.gerarContrato(
+                                  enrollmentFmt: enrollmentFmt,
+                                  monthlyFmt: monthlyFmt,
+                                );
+                                _toast(context, 'Contrato gerado!');
+                              } catch (e) {
+                                _toast(context, 'Falha ao gerar contrato: $e');
+                              }
+                            },
+                      icon: contractStore.loading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.edit_document),
+                      label: Text(
+                        contractStore.loading
+                            ? 'Gerando...'
+                            : 'Gerar contrato',
+                      ),
+                      style: FilledButton.styleFrom(padding:
+                          const EdgeInsets.symmetric(vertical: 14)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: (contractStore.checking ||
+                              contractStore.loading ||
+                              !hasEnvelope)
+                          ? null
+                          : () async {
+                              final ds = await contractStore
+                                  .conferirAssinaturaDocuSign();
+                              final msg = (ds == null)
+                                  ? 'Não foi possível atualizar agora.'
+                                  : (ds.signed
+                                      ? 'Contrato assinado.'
+                                      : 'Contrato ainda pendente.');
+                              _toast(context, 'Status atualizado • $msg');
+                            },
+                      icon: contractStore.checking
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.sync),
+                      label: const Text('Atualizar status'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                     ),
-                  if (contractStore.lastCheckedAt != null)
-                    Text(
-                      'Última verificação: ${_fmtDt(contractStore.lastCheckedAt!)}',
-                      style: TextStyle(color: cs.outline),
-                    ),
+                  ),
                 ],
+              ),
+
+              // ---------- Infos: envelope / última verificação ----------
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: cs.outlineVariant),
+                ),
+                child: Wrap(
+                  spacing: 16,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (hasEnvelope)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.inventory_2_outlined, size: 18),
+                          const SizedBox(width: 6),
+                          InkWell(
+                            onTap: () async {
+                              final url = Modular.get<FinishContractStore>()
+                                  .getEnvelopePdfUrl();
+                              if (url == null) return;
+                              final uri = Uri.parse(url);
+                              if (await canLaunchUrl(uri)) {
+                                await launchUrl(uri,
+                                    mode: LaunchMode.externalApplication);
+                              }
+                            },
+                            child: Chip(
+                              label: Text('Envelope: ${_short(envelopeId!)}'),
+                              backgroundColor: cs.surface,
+                              side: BorderSide(color: cs.outlineVariant),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Copiar ID',
+                            icon: const Icon(Icons.copy, size: 18),
+                            onPressed: () async {
+                              await Clipboard.setData(
+                                  ClipboardData(text: envelopeId!));
+                              _toast(context, 'Envelope ID copiado');
+                            },
+                          ),
+                        ],
+                      )
+                    else
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.inventory_2_outlined, size: 18),
+                          const SizedBox(width: 6),
+                          Text('Envelope ainda não gerado',
+                              style: textTheme.bodyMedium
+                                  ?.copyWith(color: cs.onSurfaceVariant)),
+                        ],
+                      ),
+
+                    // Última verificação
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.schedule, size: 18),
+                        const SizedBox(width: 6),
+                        Text(
+                          contractStore.lastCheckedAt != null
+                              ? 'Última verificação: ${_fmtDt(contractStore.lastCheckedAt!)}'
+                              : 'Ainda não verificado',
+                          style: textTheme.bodyMedium
+                              ?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           );
@@ -246,30 +234,25 @@ class ContratoCard extends StatelessWidget {
 
   static String _fmtCurrency(dynamic v) {
     if (v == null) return 'R\$ 0,00';
-
     if (v is num) return _toCurrency(v);
-
     if (v is String) {
       final s = v.trim();
       if (s.isEmpty) return 'R\$ 0,00';
       if (s.contains('R\$')) return s; // já formatado
-
       final numeric =
           double.tryParse(s.replaceAll('.', '').replaceAll(',', '.'));
       if (numeric != null) return _toCurrency(numeric);
-
-      return s; // fallback: devolve como veio
+      return s; // fallback
     }
-
     return 'R\$ 0,00';
   }
 
   static String _toCurrency(num? v) {
-  final n = (v ?? 0); // ✅ não multiplica
-  final cents = n.round();
-  final s = (cents / 100).toStringAsFixed(2).replaceAll('.', ',');
-  return 'R\$ $s';
-}
+    final n = (v ?? 0);
+    final cents = n.round();
+    final s = (cents / 100).toStringAsFixed(2).replaceAll('.', ',');
+    return 'R\$ $s';
+  }
 
   static String _short(String s) {
     if (s.length <= 12) return s;
@@ -315,34 +298,7 @@ class ContratoCard extends StatelessWidget {
     );
   }
 
-  Future<void> _showLinkDialog(BuildContext context, String url) async {
-    if (!context.mounted) return;
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Link do contrato'),
-        content: SelectableText(url, style: const TextStyle(fontSize: 14)),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: url));
-              if (context.mounted) {
-                Navigator.of(ctx).pop();
-                _toast(context, 'Link copiado para a área de transferência');
-              }
-            },
-            child: const Text('Copiar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Fechar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _toast(BuildContext context, String msg) {
+  static void _toast(BuildContext context, String msg) {
     if (!context.mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger

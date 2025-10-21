@@ -20,6 +20,9 @@ class VendaModel {
   /// ID do gateway salvo no backend (agora guarda o myId como texto)
   final String? gatewayPagamentoId;
 
+  /// ID do envelope DocuSign no backend (coluna `envelope_id`)
+  final String? envelopeId;
+
   /// Sinalizadores da proposta (vêm do backend)
   final bool pagamentoConcluido;
   final bool contratoAssinado;
@@ -40,6 +43,7 @@ class VendaModel {
     this.plano,
     this.nroProposta,
     this.gatewayPagamentoId,
+    this.envelopeId,
     this.origin = VendaOrigin.local,
     this.pagamentoConcluido = false,
     this.contratoAssinado = false,
@@ -59,7 +63,8 @@ class VendaModel {
     PlanModel? plano,
     int? nroProposta,
     VendaOrigin? origin,
-    String? gatewayPagamentoId, // << agora String?
+    String? gatewayPagamentoId,
+    String? envelopeId,
     bool? pagamentoConcluido,
     bool? contratoAssinado,
     bool? vendaFinalizada,
@@ -76,6 +81,7 @@ class VendaModel {
       nroProposta: nroProposta ?? this.nroProposta,
       origin: origin ?? this.origin,
       gatewayPagamentoId: gatewayPagamentoId ?? this.gatewayPagamentoId,
+      envelopeId: envelopeId ?? this.envelopeId,
       pagamentoConcluido: pagamentoConcluido ?? this.pagamentoConcluido,
       contratoAssinado: contratoAssinado ?? this.contratoAssinado,
       vendaFinalizada: vendaFinalizada ?? this.vendaFinalizada,
@@ -96,6 +102,7 @@ class VendaModel {
       'nroProposta': nroProposta,
       'origin': origin.name,
       'gatewayPagamentoId': gatewayPagamentoId, // String (myId)
+      'envelopeId': envelopeId, // persiste localmente em camelCase
       'pagamentoConcluido': pagamentoConcluido,
       'contratoAssinado': contratoAssinado,
       'vendaFinalizada': vendaFinalizada,
@@ -150,6 +157,7 @@ class VendaModel {
         _ => VendaOrigin.local,
       },
       gatewayPagamentoId: _toStringOrNull(json['gatewayPagamentoId']),
+      envelopeId: _toStringOrNull(json['envelopeId']),
       pagamentoConcluido: _asBool(json['pagamentoConcluido']),
       contratoAssinado: _asBool(json['contratoAssinado']),
       vendaFinalizada: _asBool(json['vendaFinalizada']),
@@ -193,6 +201,10 @@ class VendaModel {
     final String? gwId = _toStringOrNull(
         json['gateway_pagamento_id'] ?? json['gatewayPagamentoId']);
 
+    // envelope_id: snake/camel
+    final String? envId =
+        _toStringOrNull(json['envelope_id'] ?? json['envelopeId']);
+
     // Suportar tanto "pessoaTitular" quanto "pessoatitular"
     final titularJson = (json['pessoaTitular'] ?? json['pessoatitular'])
         as Map<String, dynamic>?;
@@ -217,6 +229,7 @@ class VendaModel {
       nroProposta: nroProp,
       origin: VendaOrigin.cloud,
       gatewayPagamentoId: gwId, // << String (myId)
+      envelopeId: envId,
 
       // flags (snake/camel)
       pagamentoConcluido:

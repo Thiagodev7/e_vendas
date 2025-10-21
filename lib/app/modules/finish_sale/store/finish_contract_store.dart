@@ -56,8 +56,21 @@ abstract class _FinishContractStoreBase with Store {
   @computed
   bool get podeDispararContrato => !loading && !contratoAssinadoServer;
 
-  @action
-  void bindVenda(VendaModel v) => venda = v;
+  @computed
+bool get hasEnvelope =>
+    (contratoEnvelopeId != null && contratoEnvelopeId!.isNotEmpty);
+
+// (opcional) se o seu VendaModel já tiver envelopeId/envelope_id:
+@action
+void bindVenda(VendaModel v) {
+  venda = v;
+  // se existir na venda, já preenche o store pra UI habilitar os botões:
+  try {
+    // ajuste o nome do campo conforme você implementou no model
+    final dynamic eid = (v as dynamic).envelopeId ?? (v as dynamic).envelope_id;
+    if (eid is String && eid.isNotEmpty) contratoEnvelopeId = eid;
+  } catch (_) {}
+}
 
   @action
   void bindNroProposta(dynamic nro) => nroProposta = _coerceInt(nro);
@@ -359,4 +372,5 @@ Future<String?> criarRecipientViewUrl({String? returnUrl}) async {
     if (envId == null || envId.isEmpty) return null;
     return _contract.getEnvelopePdfUrl(envId);
   }
+  
 }
