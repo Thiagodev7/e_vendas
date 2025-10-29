@@ -1,6 +1,12 @@
 // lib/app/modules/totem/pages/totem_finalize_page.dart
 import 'dart:math';
 import 'dart:ui';
+import 'dart:convert'; // <-- Adicionado para pagamento
+import 'package:flutter_mobx/flutter_mobx.dart'; // <-- Adicionado para pagamento
+import 'package:qr_flutter/qr_flutter.dart'; // <-- Adicionado para pagamento
+import 'package:e_vendas/app/modules/totem/stores/totem_payment_store.dart'; // <-- Adicionado para pagamento
+import 'package:e_vendas/app/modules/finish_sale/store/finish_types.dart'; // <-- Adicionado para pagamento
+
 import 'package:e_vendas/app/core/model/contato_model.dart';
 import 'package:e_vendas/app/core/model/generic_state_model.dart';
 import 'package:e_vendas/app/core/model/pessoa_model.dart';
@@ -14,8 +20,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
-// ====== mesma enum/peças do arquivo anterior ======
-enum _PayMethod { pix, card, boleto }
+// Removida a enum _PayMethod local, pois usaremos a global (PayMethod)
+// enum _PayMethod { pix, card, boleto }
 
 class TotemFinalizePage extends StatefulWidget {
   const TotemFinalizePage({super.key});
@@ -235,15 +241,34 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
   }
 
   // ======================
-  // PAGAMENTO (mesmo do arquivo anterior)
+  // PAGAMENTO (MÉTODO ATUALIZADO)
   // ======================
 
   Future<void> _onPay(BuildContext context, BillingBreakdown billing) async {
+    // ===== Cálculo de valores (copiado do topo do build) =====
+    // Precisamos recalcular o planForBilling aqui para construir a VendaModel
+    final vidas = _totem.dependentes.length + 1;
+    final PlanModel? planBase = _totem.selectedPlan;
+    final PlanModel? planForBilling =
+        planBase?.copyWith(vidasSelecionadas: vidas);
+
+    if (planForBilling == null) {
+      _toast('Erro: Plano não encontrado para gerar venda.');
+      return;
+    }
+    
+    // 1. Constrói a VendaModel (reutilizando a função do contrato)
+    final venda = _buildVendaFromTotem(planForBilling);
+
+    // 2. Abre o modal passando a VendaModel
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _PaymentSheet(billing: billing),
+      builder: (_) => _PaymentSheet(
+        billing: billing,
+        venda: venda, // <-- Passando a VendaModel
+      ),
     );
   }
 
@@ -573,62 +598,69 @@ class _ResumoValoresTotem extends StatelessWidget {
 }
 
 // ============================================================================
-// BOTTOM SHEET DE PAGAMENTO (igual ao anterior)
+// BOTTOM SHEET DE PAGAMENTO (VERSÃO CORRIGIDA E CONECTADA)
 // ============================================================================
 
 class _PaymentSheet extends StatefulWidget {
-  const _PaymentSheet({required this.billing});
+  const _PaymentSheet({required this.billing, required this.venda});
   final BillingBreakdown billing;
+  final VendaModel venda; // <-- Recebe a VendaModel
 
   @override
   State<_PaymentSheet> createState() => _PaymentSheetState();
 }
 
 class _PaymentSheetState extends State<_PaymentSheet> {
-  _PayMethod? _method;
-  bool _processing = false;
-  String? _pixCode;
+  // Pega a store do Modular
+  final store = Modular.get<TotemPaymentStore>();
+
+  @override
+  void initState() {
+    super.initState();
+    // Configura a store com a venda atual
+    store.setVenda(widget.venda);
+  }
+
+  @override
+  void dispose() {
+    store.dispose(); // Limpa o timer da store ao fechar o modal
+    super.dispose();
+  }
 
   double get _amount => widget.billing.valorAgora;
-
   String _fmt(num v) => 'R\$ ${v.toStringAsFixed(2).replaceAll('.', ',')}';
 
-  Future<void> _startPayment() async {
-    if (_method == null) return;
-    setState(() => _processing = true);
-    await Future.delayed(const Duration(milliseconds: 600));
+  // Ação de iniciar pagamento (agora chama a store)
+Future<void> _startPayment() async {
+    if (store.loading) return;
     try {
-      switch (_method!) {
-        case _PayMethod.pix:
-          setState(() {
-            _pixCode = '000201010212...5408${_amount.toStringAsFixed(2)}...'; // mock
-          });
-          break;
-        case _PayMethod.card:
-          _showDone('Pagamento via cartão iniciado (exemplo).');
-          break;
-        case _PayMethod.boleto:
-          _showDone('Boleto gerado (exemplo).');
-          break;
+      // !! CORREÇÃO APLICADA AQUI !!
+      // Passamos o objeto 'billing' inteiro, que já temos em 'widget.billing'
+      if (store.metodo == PayMethod.card) {
+        await store.gerarLinkCartao(billing: widget.billing);
+      } else {
+        await store.gerarPix(billing: widget.billing);
       }
-    } finally {
-      if (mounted) setState(() => _processing = false);
+      // O timer da store (auto-consulta) já foi iniciado
+    } catch (e) {
+      _toast('Erro ao iniciar pagamento: $e');
     }
   }
 
+  // Ação de copiar PIX (lê da store)
   void _copyPix() async {
-    if (_pixCode == null) return;
-    await Clipboard.setData(ClipboardData(text: _pixCode!));
-    if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Código PIX copiado.')));
-    }
+    if (store.pixEmv == null) return;
+    await Clipboard.setData(ClipboardData(text: store.pixEmv!));
+    _toast('Código PIX copiado.');
   }
 
-  void _showDone(String msg) {
+  // Helper para mostrar snackbar
+  void _toast(String msg) {
     if (!mounted) return;
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger
+      ?..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -636,120 +668,226 @@ class _PaymentSheetState extends State<_PaymentSheet> {
     final cs = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 8,
-        bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('Escolha a forma de pagamento', style: t.titleLarge),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
+    // Transforma o build em um Observer
+    return Observer(builder: (_) {
+      // 1. Lógica de Sucesso (auto-navegação)
+      if (store.paymentStatus == PaymentStatus.pago) {
+        // Atraso leve para o usuário ver o "Pago!"
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) {
+            Navigator.pop(context); // Fecha o modal
+            
+            // TODO: Navegar para a próxima etapa (ex: contrato ou sucesso final)
+            // Modular.to.pushReplacementNamed('/totem/proxima-etapa');
+          }
+        });
+
+        // UI de Sucesso
+        return Padding(
+          padding:
+              const EdgeInsets.only(left: 32, right: 32, top: 16, bottom: 48),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _PayTile(
-                selected: _method == _PayMethod.pix,
-                icon: Icons.qr_code_2_rounded,
-                label: 'PIX',
-                onTap: () => setState(() => _method = _PayMethod.pix),
-              ),
-              _PayTile(
-                selected: _method == _PayMethod.card,
-                icon: Icons.credit_card_rounded,
-                label: 'Cartão',
-                onTap: () => setState(() => _method = _PayMethod.card),
-              ),
-              _PayTile(
-                selected: _method == _PayMethod.boleto,
-                icon: Icons.receipt_long_rounded,
-                label: 'Boleto',
-                onTap: () => setState(() => _method = _PayMethod.boleto),
-              ),
+              Icon(Icons.check_circle, color: Colors.green, size: 70),
+              const SizedBox(height: 16),
+              Text('Pagamento Aprovado!',
+                  style: t.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              const Text('Aguarde, estamos te redirecionando...',
+                  textAlign: TextAlign.center),
             ],
           ),
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text('Total a pagar agora',
+        );
+      }
+
+      // 2. UI Principal de Pagamento
+      return Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 8,
+          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Escolha a forma de pagamento', style: t.titleLarge),
+            const SizedBox(height: 12),
+            // Seletores (lendo da store)
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _PayTile(
+                  selected: store.metodo == PayMethod.pix,
+                  icon: Icons.qr_code_2_rounded,
+                  label: 'PIX',
+                  onTap: () => store.setMetodo(PayMethod.pix),
+                ),
+                _PayTile(
+                  selected: store.metodo == PayMethod.card,
+                  icon: Icons.credit_card_rounded,
+                  label: 'Cartão',
+                  onTap: () => store.setMetodo(PayMethod.card),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text('Total a pagar agora',
                 style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _fmt(_amount),
-            style: t.headlineSmall
-                ?.copyWith(fontWeight: FontWeight.bold, color: cs.primary),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            widget.billing.kind == BillingKind.mensal
-                ? 'Inclui pró-rata (${widget.billing.remainingDays}/${widget.billing.monthDays}) + adesão.'
-                : 'Total do 1º ciclo anual (desconto aplicado) + adesão.',
-            style: TextStyle(color: cs.onSurfaceVariant),
-          ),
-          const SizedBox(height: 16),
-          if (_method == _PayMethod.pix && _pixCode != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              width: 220,
-              height: 220,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: cs.surfaceVariant.withOpacity(0.6),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: cs.outlineVariant),
-              ),
-              child: const Icon(Icons.qr_code_2_rounded, size: 120),
+            const SizedBox(height: 4),
+            Text(
+              _fmt(_amount),
+              style: t.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.bold, color: cs.primary),
             ),
             const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: _copyPix,
-              icon: const Icon(Icons.copy_rounded),
-              label: const Text('Copiar código PIX'),
+            Text(
+              widget.billing.kind == BillingKind.mensal
+                  ? 'Inclui pró-rata (${widget.billing.remainingDays}/${widget.billing.monthDays}) + adesão.'
+                  : 'Total do 1º ciclo anual (desconto aplicado) + adesão.',
+              style: TextStyle(color: cs.onSurfaceVariant),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
-          ],
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _processing ? null : () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(100)),
-                  ),
-                  child: const Text('Fechar'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _processing ? null : _startPayment,
-                  icon: _processing
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.check_circle_outline_rounded),
-                  label: Text(_method == _PayMethod.pix
-                      ? (_pixCode == null ? 'Gerar PIX' : 'Concluir')
-                      : 'Iniciar'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(100)),
-                  ),
-                ),
+            const SizedBox(height: 16),
+
+            // 3. Exibição do QR Code (PIX)
+            if (store.metodo == PayMethod.pix && (store.pixEmv != null || store.pixImageBase64 != null)) ...[
+              const SizedBox(height: 8),
+              _buildPixDisplay(cs), // QR Code Real
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: _copyPix,
+                icon: const Icon(Icons.copy_rounded),
+                label: const Text('Copiar código PIX'),
               ),
             ],
+
+            // 4. Exibição do QR Code (Cartão)
+            if (store.metodo == PayMethod.card && store.cardUrl != null) ...[
+              const SizedBox(height: 8),
+              const Text('Aponte a câmera para pagar com cartão:',
+                  textAlign: TextAlign.center),
+              _buildCardQrDisplay(cs), // QR Code Real
+            ],
+
+            // 5. Chip de Status
+            if (store.paymentStatus == PaymentStatus.aguardando)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Chip(
+                  label: const Text('Aguardando pagamento... (verificando)'),
+                  backgroundColor: Colors.orange.withOpacity(0.1),
+                  avatar: const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                ),
+              ),
+            const SizedBox(height: 16),
+
+            // 6. Botões de Ação
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: store.loading ? null : () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(100)),
+                    ),
+                    child: const Text('Fechar'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    // Desabilita se estiver carregando OU se já gerou e está aguardando
+                    onPressed: (store.loading ||
+                            store.paymentStatus == PaymentStatus.aguardando)
+                        ? null
+                        : _startPayment,
+                    icon: store.loading
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.check_circle_outline_rounded),
+                    label: Text(
+                      store.metodo == PayMethod.pix
+                          ? 'Gerar PIX'
+                          : 'Gerar Link (Cartão)',
+                    ),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(100)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  // --- Widgets de exibição do QR Code (Baseados no TotemPagamentoWidget) ---
+
+  Widget _buildPixDisplay(ColorScheme cs) {
+    // QR vindo da API (Base64)
+    if ((store.pixImageBase64 ?? '').isNotEmpty) {
+      try {
+        final bytes = base64Decode(
+          store.pixImageBase64!.replaceFirst(
+            RegExp('^data:image/\\w+;base64,'),
+            '',
           ),
-        ],
+        );
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.memory(bytes, width: 220, height: 220),
+        );
+      } catch (e) {
+        // Fallback se o base64 estiver corrompido
+      }
+    }
+    // Fallback local com EMV
+    if ((store.pixEmv ?? '').isNotEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: cs.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: QrImageView(
+          data: store.pixEmv!,
+          version: QrVersions.auto,
+          size: 200,
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildCardQrDisplay(ColorScheme cs) {
+    if ((store.cardUrl ?? '').isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: QrImageView(
+        data: store.cardUrl!,
+        version: QrVersions.auto,
+        size: 200,
       ),
     );
   }
@@ -913,10 +1051,13 @@ class _ContactChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isCel = c.idMeioComunicacao == 1;
+    
+    // CORREÇÃO: Assumindo 1=Email (ou @), 2=Celular
+    final isEmail = c.idMeioComunicacao == 1 || c.descricao.contains('@');
+    
     return Chip(
-      avatar: Icon(isCel ? Icons.phone_iphone : Icons.email_outlined, size: 18),
-      label: Text('${isCel ? 'Celular' : 'E-mail'}: ${c.descricao}'),
+      avatar: Icon(isEmail ? Icons.email_outlined : Icons.phone_iphone, size: 18),
+      label: Text(c.descricao),
       backgroundColor: cs.surfaceVariant.withOpacity(0.7),
       shape: StadiumBorder(side: BorderSide(color: cs.outlineVariant)),
     );

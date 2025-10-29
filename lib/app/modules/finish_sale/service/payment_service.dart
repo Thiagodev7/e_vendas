@@ -5,6 +5,7 @@ class PaymentService {
   final Dio _dio = ApiClient().dio;
 
 Future<PixChargeResult> gerarPix({required Map<String, dynamic> payload}) async {
+  print(payload);
   final res = await _dio.post('/celcoin/generatePix', data: payload);
   final charge = Map<String, dynamic>.from(res.data['Charge'] ?? {});
   print('Charge: $charge');
