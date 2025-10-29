@@ -2,7 +2,7 @@ class EnvironmentConfig {
   // Defina o ambiente aqui: 'dev', 'prod', 'homolog'
   static const String _env = String.fromEnvironment(
     'ENV',
-    defaultValue: 'homolog',
+    defaultValue: 'prod',
   );
 
   // URLs por ambiente

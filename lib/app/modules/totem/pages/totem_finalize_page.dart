@@ -1,11 +1,11 @@
 // lib/app/modules/totem/pages/totem_finalize_page.dart
 import 'dart:math';
 import 'dart:ui';
-import 'dart:convert'; // <-- Adicionado para pagamento
-import 'package:flutter_mobx/flutter_mobx.dart'; // <-- Adicionado para pagamento
-import 'package:qr_flutter/qr_flutter.dart'; // <-- Adicionado para pagamento
-import 'package:e_vendas/app/modules/totem/stores/totem_payment_store.dart'; // <-- Adicionado para pagamento
-import 'package:e_vendas/app/modules/finish_sale/store/finish_types.dart'; // <-- Adicionado para pagamento
+import 'dart:convert';
+import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:e_vendas/app/modules/totem/stores/totem_payment_store.dart';
+import 'package:e_vendas/app/modules/finish_sale/store/finish_types.dart';
 
 import 'package:e_vendas/app/core/model/contato_model.dart';
 import 'package:e_vendas/app/core/model/generic_state_model.dart';
@@ -19,9 +19,7 @@ import 'package:e_vendas/app/modules/totem/stores/totem_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_modular/flutter_modular.dart';
-
-// Removida a enum _PayMethod local, pois usaremos a global (PayMethod)
-// enum _PayMethod { pix, card, boleto }
+// REMOVIDO: import 'package:e_vendas/app/modules/sales/services/sales_service.dart';
 
 class TotemFinalizePage extends StatefulWidget {
   const TotemFinalizePage({super.key});
@@ -37,8 +35,10 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
 
   final _totem = Modular.get<TotemStore>();
   final _contract = Modular.get<FinishContractStore>();
+  // REMOVIDO: final _salesService = Modular.get<SalesService>();
 
   bool _generating = false;
+  // REMOVIDO: VendaModel? _propostaSalva;
 
   @override
   void initState() {
@@ -146,26 +146,26 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
             const SizedBox(width: 12),
 
             // === Gerar contrato + abrir WebView de assinatura (embutido)
-            Expanded(
-              child: FilledButton.tonalIcon(
-                onPressed: (_generating || planForBilling == null) ? null : () => _onGenerateAndSign(planForBilling),
-                icon: _generating
-                    ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.draw_rounded),
-                label: const Text('Gerar contrato e assinar'),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
+            // Expanded(
+            //   child: FilledButton.tonalIcon(
+            //     onPressed: (_generating || planForBilling == null) ? null : () => _onGenerateAndSign(planForBilling),
+            //     icon: _generating
+            //         ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+            //         : const Icon(Icons.draw_rounded),
+            //     label: const Text('Gerar contrato e assinar'),
+            //     style: FilledButton.styleFrom(
+            //       padding: const EdgeInsets.symmetric(vertical: 18),
+            //       textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+            //     ),
+            //   ),
+            // ),
+            // const SizedBox(width: 12),
 
             // === Pagamento (opcional, permanece se você quiser cobrar antes)
             Expanded(
               child: FilledButton.icon(
-                onPressed: (billing == null) ? null : () => _onPay(context, billing),
+                onPressed: (_generating || billing == null) ? null : () => _onPay(context, billing),
                 icon: const Icon(Icons.payments_rounded),
                 label: const Text('Realizar pagamento'),
                 style: FilledButton.styleFrom(
@@ -182,54 +182,83 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
   }
 
   // ======================
-  // CONTRATO + ASSINATURA
+  // CONTRATO + ASSINATURA (FLUXO FINAL)
   // ======================
-
   Future<void> _onGenerateAndSign(PlanModel planForBilling) async {
+    if (_generating) return;
     try {
       setState(() => _generating = true);
 
-      // 1) Monta a venda a partir do TotemStore
-      final venda = _buildVendaFromTotem(planForBilling);
+      // 1) Monta a venda local
+      final VendaModel vendaLocal = _buildVendaFromTotem(planForBilling);
 
-      // 2) Vincula no store
-      _contract.bindVenda(venda);
+      // 2) Vincula no store de contrato
+      _contract.bindVenda(vendaLocal);
 
-      // 3) Formata mensalidade/adesão no mesmo padrão do seu ContratoCard
-      final dynamic monthlyRaw    = planForBilling.getMensalidade() ?? planForBilling.getMensalidadeTotal();
+      // ... (formata valores, gera envelope) ...
+       final dynamic monthlyRaw    = planForBilling.getMensalidade() ?? planForBilling.getMensalidadeTotal();
       final dynamic enrollmentRaw = planForBilling.getTaxaAdesao()  ?? planForBilling.getTaxaAdesaoTotal();
       final String monthlyFmt     = _fmtCurrency(monthlyRaw);
       final String enrollmentFmt  = _fmtCurrency(enrollmentRaw);
 
-      // 4) Envia para gerar o envelope (DocuSign)
       await _contract.gerarContrato(
         enrollmentFmt: enrollmentFmt,
         monthlyFmt: monthlyFmt,
       );
 
-      // 5) Cria a URL de Recipient View (embutida) e abre WebView
-      final url = await _contract.criarRecipientViewUrl(
-        // se quiser, passe uma returnUrl custom:
-        // returnUrl: 'https://seuapp.com/retorno-assinatura'
-      );
 
-      if (url == null || url.isEmpty) {
-        _toast('Não foi possível criar o link de assinatura.');
-        return;
-      }
-
-      // Abra a página de webview do totem (defina a rota no seu módulo)
-      Modular.to.pushNamed('/totem/assinar-contrato', arguments: {'url': url});
     } catch (e) {
       _toast('Falha ao gerar/abrir contrato: $e');
     } finally {
-      if (mounted) setState(() => _generating = false);
+      // O estado _generating será resetado pela tela de Loading ou se o usuário cancelar
+       if (mounted) setState(() => _generating = false);
     }
   }
 
-  // Constrói uma VendaModel usando os dados do TotemStore
+ // ======================
+  // PAGAMENTO (FLUXO FINAL)
+  // ======================
+  Future<void> _onPay(BuildContext context, BillingBreakdown billing) async {
+    if (_generating) return; // Evita clique duplo
+
+     // Calcula o plano (necessário para o callback e VendaModel)
+    final vidas = _totem.dependentes.length + 1;
+    final PlanModel? planBase = _totem.selectedPlan;
+    final PlanModel? planForBilling = planBase?.copyWith(vidasSelecionadas: vidas);
+
+     if (planForBilling == null) {
+      _toast('Erro: Plano não encontrado para gerar venda.');
+      return;
+    }
+
+     // Constrói a VendaModel local
+    final VendaModel vendaLocal = _buildVendaFromTotem(planForBilling);
+
+     // Abre o modal de pagamento
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _PaymentSheet(
+        billing: billing,
+        venda: vendaLocal,
+        // Callback chamado QUANDO o pagamento for confirmado
+        onPaymentSuccess: () {
+          Navigator.pop(context); // Fecha o modal de pagamento
+          // --- ALTERAÇÃO AQUI ---
+          // Navega para a tela de loading para chamar o Datanext
+          if (mounted) {
+             Modular.to.pushNamed('/totem/loading', arguments: vendaLocal);
+          }
+          // --- FIM DA ALTERAÇÃO ---
+        },
+      ),
+    );
+  }
+   // Constrói uma VendaModel usando os dados do TotemStore
   VendaModel _buildVendaFromTotem(PlanModel plan) {
-    // Se seu VendaModel tiver factory/copyWith diferentes, ajuste aqui.
+    // Este método está correto, ele cria o VendaModel local
     return VendaModel(
       plano: plan,
       pessoaTitular: _totem.titular,
@@ -237,43 +266,11 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
       dependentes: _totem.dependentes.toList(),
       contatos: _totem.contatos.toList(),
       pessoaResponsavelFinanceiro: _totem.responsavelFinanceiro,
+      // nroProposta fica nulo por padrão, que é o que você quer
     );
   }
 
-  // ======================
-  // PAGAMENTO (MÉTODO ATUALIZADO)
-  // ======================
-
-  Future<void> _onPay(BuildContext context, BillingBreakdown billing) async {
-    // ===== Cálculo de valores (copiado do topo do build) =====
-    // Precisamos recalcular o planForBilling aqui para construir a VendaModel
-    final vidas = _totem.dependentes.length + 1;
-    final PlanModel? planBase = _totem.selectedPlan;
-    final PlanModel? planForBilling =
-        planBase?.copyWith(vidasSelecionadas: vidas);
-
-    if (planForBilling == null) {
-      _toast('Erro: Plano não encontrado para gerar venda.');
-      return;
-    }
-    
-    // 1. Constrói a VendaModel (reutilizando a função do contrato)
-    final venda = _buildVendaFromTotem(planForBilling);
-
-    // 2. Abre o modal passando a VendaModel
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => _PaymentSheet(
-        billing: billing,
-        venda: venda, // <-- Passando a VendaModel
-      ),
-    );
-  }
-
-  // ===== helpers =====
-
+  // ===== helpers (permanecem os mesmos) =====
   static String _fmtCurrency(dynamic v) {
     if (v == null) return 'R\$ 0,00';
     if (v is num) return _toCurrency(v);
@@ -305,9 +302,8 @@ class _TotemFinalizePageState extends State<TotemFinalizePage>
 }
 
 // ============================================================================
-// RESUMO (CARD) — igual ao anterior, apenas mantido
+// RESUMO (CARD) — (Sem alterações)
 // ============================================================================
-
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
     required this.billing,
@@ -598,13 +594,18 @@ class _ResumoValoresTotem extends StatelessWidget {
 }
 
 // ============================================================================
-// BOTTOM SHEET DE PAGAMENTO (VERSÃO CORRIGIDA E CONECTADA)
+// BOTTOM SHEET DE PAGAMENTO (Mantém a lógica do callback)
 // ============================================================================
 
 class _PaymentSheet extends StatefulWidget {
-  const _PaymentSheet({required this.billing, required this.venda});
+  const _PaymentSheet({
+    required this.billing,
+    required this.venda,
+    required this.onPaymentSuccess, // <-- Recebe o callback
+  });
   final BillingBreakdown billing;
-  final VendaModel venda; // <-- Recebe a VendaModel
+  final VendaModel venda;
+  final VoidCallback onPaymentSuccess; // <-- Recebe o callback
 
   @override
   State<_PaymentSheet> createState() => _PaymentSheetState();
@@ -617,7 +618,7 @@ class _PaymentSheetState extends State<_PaymentSheet> {
   @override
   void initState() {
     super.initState();
-    // Configura a store com a venda atual
+    // Configura a store com a venda atual (que tem nroProposta = null)
     store.setVenda(widget.venda);
   }
 
@@ -630,18 +631,15 @@ class _PaymentSheetState extends State<_PaymentSheet> {
   double get _amount => widget.billing.valorAgora;
   String _fmt(num v) => 'R\$ ${v.toStringAsFixed(2).replaceAll('.', ',')}';
 
-  // Ação de iniciar pagamento (agora chama a store)
-Future<void> _startPayment() async {
+  // Ação de iniciar pagamento (passa o billing)
+  Future<void> _startPayment() async {
     if (store.loading) return;
     try {
-      // !! CORREÇÃO APLICADA AQUI !!
-      // Passamos o objeto 'billing' inteiro, que já temos em 'widget.billing'
       if (store.metodo == PayMethod.card) {
         await store.gerarLinkCartao(billing: widget.billing);
       } else {
         await store.gerarPix(billing: widget.billing);
       }
-      // O timer da store (auto-consulta) já foi iniciado
     } catch (e) {
       _toast('Erro ao iniciar pagamento: $e');
     }
@@ -668,17 +666,12 @@ Future<void> _startPayment() async {
     final cs = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
 
-    // Transforma o build em um Observer
     return Observer(builder: (_) {
-      // 1. Lógica de Sucesso (auto-navegação)
+      // 1. Lógica de Sucesso (Chama o callback)
       if (store.paymentStatus == PaymentStatus.pago) {
-        // Atraso leve para o usuário ver o "Pago!"
         Future.delayed(const Duration(milliseconds: 1500), () {
           if (mounted) {
-            Navigator.pop(context); // Fecha o modal
-            
-            // TODO: Navegar para a próxima etapa (ex: contrato ou sucesso final)
-            // Modular.to.pushReplacementNamed('/totem/proxima-etapa');
+            widget.onPaymentSuccess(); // <-- CHAMA O CALLBACK
           }
         });
 
@@ -694,7 +687,7 @@ Future<void> _startPayment() async {
               Text('Pagamento Aprovado!',
                   style: t.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('Aguarde, estamos te redirecionando...',
+              const Text('Gerando seu contrato, aguarde...',
                   textAlign: TextAlign.center),
             ],
           ),
@@ -714,7 +707,6 @@ Future<void> _startPayment() async {
           children: [
             Text('Escolha a forma de pagamento', style: t.titleLarge),
             const SizedBox(height: 12),
-            // Seletores (lendo da store)
             Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -755,7 +747,7 @@ Future<void> _startPayment() async {
             // 3. Exibição do QR Code (PIX)
             if (store.metodo == PayMethod.pix && (store.pixEmv != null || store.pixImageBase64 != null)) ...[
               const SizedBox(height: 8),
-              _buildPixDisplay(cs), // QR Code Real
+              _buildPixDisplay(cs),
               const SizedBox(height: 8),
               TextButton.icon(
                 onPressed: _copyPix,
@@ -769,7 +761,7 @@ Future<void> _startPayment() async {
               const SizedBox(height: 8),
               const Text('Aponte a câmera para pagar com cartão:',
                   textAlign: TextAlign.center),
-              _buildCardQrDisplay(cs), // QR Code Real
+              _buildCardQrDisplay(cs),
             ],
 
             // 5. Chip de Status
@@ -804,7 +796,6 @@ Future<void> _startPayment() async {
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton.icon(
-                    // Desabilita se estiver carregando OU se já gerou e está aguardando
                     onPressed: (store.loading ||
                             store.paymentStatus == PaymentStatus.aguardando)
                         ? null
@@ -837,9 +828,7 @@ Future<void> _startPayment() async {
   }
 
   // --- Widgets de exibição do QR Code (Baseados no TotemPagamentoWidget) ---
-
   Widget _buildPixDisplay(ColorScheme cs) {
-    // QR vindo da API (Base64)
     if ((store.pixImageBase64 ?? '').isNotEmpty) {
       try {
         final bytes = base64Decode(
@@ -852,11 +841,8 @@ Future<void> _startPayment() async {
           borderRadius: BorderRadius.circular(12),
           child: Image.memory(bytes, width: 220, height: 220),
         );
-      } catch (e) {
-        // Fallback se o base64 estiver corrompido
-      }
+      } catch (e) {/* fallback */}
     }
-    // Fallback local com EMV
     if ((store.pixEmv ?? '').isNotEmpty) {
       return Container(
         padding: const EdgeInsets.all(8),
@@ -892,6 +878,10 @@ Future<void> _startPayment() async {
     );
   }
 }
+
+// ============================================================================
+// WIDGETS DE SUPORTE (Sem alterações)
+// ============================================================================
 
 class _PayTile extends StatelessWidget {
   const _PayTile({
@@ -1052,7 +1042,6 @@ class _ContactChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     
-    // CORREÇÃO: Assumindo 1=Email (ou @), 2=Celular
     final isEmail = c.idMeioComunicacao == 1 || c.descricao.contains('@');
     
     return Chip(
@@ -1064,7 +1053,7 @@ class _ContactChip extends StatelessWidget {
   }
 }
 
-// ===== Fundo animado (mesmo estilo) =====
+// ===== Fundo animado (Sem alterações) =====
 class _AnimatedBlobBackground extends StatefulWidget {
   const _AnimatedBlobBackground();
 

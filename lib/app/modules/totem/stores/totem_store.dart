@@ -248,15 +248,15 @@ abstract class _TotemStoreBase with Store {
 
   /// Atalho: gera contrato (se preciso) e já retorna a URL de assinatura embutida.
   /// Use essa URL para abrir no WebView.
-  @action
-  Future<String?> gerarContratoEObterUrlAssinatura({String? returnUrl}) async {
-    // Gera caso ainda não exista
-    if (contratoEnvelopeId == null || contratoEnvelopeId!.isEmpty) {
-      final id = await gerarContrato();
-      if (id == null || id.isEmpty) return null;
-    }
-    return await criarRecipientViewUrl(returnUrl: returnUrl);
-  }
+  // @action
+  // Future<String?> gerarContratoEObterUrlAssinatura({String? returnUrl}) async {
+  //   // Gera caso ainda não exista
+  //   if (contratoEnvelopeId == null || contratoEnvelopeId!.isEmpty) {
+  //     final id = await gerarContrato();
+  //     if (id == null || id.isEmpty) return null;
+  //   }
+  //   return await criarRecipientViewUrl(returnUrl: returnUrl);
+  // }
 
   /// Cria a URL de assinatura embutida (Recipient View) para o envelope atual.
   @action

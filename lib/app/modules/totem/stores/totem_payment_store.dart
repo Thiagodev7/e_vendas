@@ -1,18 +1,15 @@
 // lib/app/modules/totem/stores/totem_payment_store.dart
 import 'dart:async';
-import 'package:e_vendas/app/core/model/endereco_model.dart';
-import 'package:e_vendas/app/core/model/plano_model.dart';
 import 'package:e_vendas/app/modules/finish_sale/widgets/billing_calculator.dart';
+import 'package:flutter/material.dart';
 import 'package:mobx/mobx.dart';
-
-// Imports corretos baseados nos seus arquivos
 import 'package:e_vendas/app/core/model/venda_model.dart';
 import 'package:e_vendas/app/core/model/contato_model.dart';
-import 'package:e_vendas/app/core/model/pessoa_model.dart'; 
-// Fim imports
-
+import 'package:e_vendas/app/core/model/pessoa_model.dart';
+import 'package:e_vendas/app/core/model/endereco_model.dart';
+import 'package:e_vendas/app/core/model/plano_model.dart';
 import 'package:e_vendas/app/modules/finish_sale/service/payment_service.dart';
-import 'package:e_vendas/app/modules/finish_sale/store/finish_types.dart'; 
+import 'package:e_vendas/app/modules/finish_sale/store/finish_types.dart';
 
 part 'totem_payment_store.g.dart';
 
@@ -22,9 +19,8 @@ abstract class _TotemPaymentStoreBase with Store {
   final PaymentService _paymentService;
   _TotemPaymentStoreBase(this._paymentService);
 
-  // Venda/Proposta atual que está sendo paga
   @observable
-  VendaModel? vendaAtual; 
+  VendaModel? vendaAtual;
 
   @observable
   PayMethod metodo = PayMethod.pix;
@@ -73,23 +69,15 @@ abstract class _TotemPaymentStoreBase with Store {
     pixEmv = null;
     pixImageBase64 = null;
     cardUrl = null;
-    // IMPORTANTE: Não zere os IDs se a venda for a mesma
-    // e já tiver flags do backend
-    if (vendaAtual != null) {
-      galaxPayId = null; // Zera o galaxPayId se for nova cobrança
-      currentMyId = vendaAtual!.gatewayPagamentoId; // Mantém o myId da proposta
-    } else {
-      galaxPayId = null;
-      currentMyId = null;
-    }
-    
+    galaxPayId = null;
+    currentMyId = null;
     paymentStatus = PaymentStatus.none;
     errorMessage = null;
     _statusTimer?.cancel();
   }
 
   // ===================================================================
-  // MÉTODO _buildPaymentPayload (TOTALMENTE REFEITO)
+  // MÉTODO _buildPaymentPayload (REFEITO SEM nroProposta)
   // ===================================================================
   Map<String, dynamic> _buildPaymentPayload(BillingBreakdown billing) {
     if (vendaAtual == null) {
@@ -123,28 +111,27 @@ abstract class _TotemPaymentStoreBase with Store {
     final cepDigits = (endereco?.cep ?? '00000000').replaceAll(RegExp(r'\D'), '');
 
     // --- Valores (em CENTAVOS) ---
-    // Usamos os valores do BillingBreakdown
     final int valorCentavos = (billing.valorAgora * 100).toInt();
     final int adesaoCentavos = (billing.adesao * 100).toInt();
     final int mensalCentavos = (billing.mensal * 100).toInt();
 
-    // --- Montar Payload (NOVO FORMATO) ---
+    // --- Montar Payload (NOVO FORMATO - SEM nroProposta) ---
     return {
-      'username': 'somosuni', // <-- Fixo, igual ao do Finish
+      'username': 'somosuni', 
       'customer': {
         'name': titular?.nome,
-        'cpf': titular?.cpf, // (confirme se no PessoaModel é 'cpf' ou 'cpfCnpj')
+        'cpf': titular?.cpf, 
         'email': emailContato.descricao,
         'cep': cepDigits,
-        'phone': celularDigits, // <-- 'phone' (string) e não 'phones' (array)
+        'phone': celularDigits, 
       },
       'plan': plano?.nomeContrato,
       'enrollment': adesaoCentavos,
       'monthly': mensalCentavos,
-      'value': valorCentavos, // <-- O valor da primeira cobrança
-      'numMonths': 1, // <-- Fixo, igual ao do Finish
+      'value': valorCentavos, 
+      'numMonths': 1, 
       'numLives': vendaAtual!.vidasSelecionadas,
-      'nro_proposta': vendaAtual!.nroProposta, // <-- snake_case
+      // 'nro_proposta': null, // <-- REMOVIDO
     };
   }
   // ===================================================================
@@ -191,8 +178,8 @@ abstract class _TotemPaymentStoreBase with Store {
       loading = false;
     }
   }
-  
-  // Função de auto-verificação
+
+    // Função de auto-verificação
   void _startStatusPolling() {
     _statusTimer?.cancel();
     _statusTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
@@ -203,17 +190,15 @@ abstract class _TotemPaymentStoreBase with Store {
       consultarStatusPagamento();
     });
   }
-
+  
   @action
   Future<PaymentStatus> consultarStatusPagamento() async {
-    // Agora também verificamos o 'gatewayPagamentoId' que vem da VendaModel
     final idParaConsulta = currentMyId ?? vendaAtual?.gatewayPagamentoId;
     
     if (galaxPayId == null && (idParaConsulta == null || idParaConsulta.isEmpty)) {
       return PaymentStatus.none;
     }
     
-    // Evita consultas paralelas
     if(loading && paymentStatus == PaymentStatus.aguardando) return paymentStatus;
 
     loading = true;
@@ -223,35 +208,21 @@ abstract class _TotemPaymentStoreBase with Store {
         myId: idParaConsulta,
       );
 
-      print(data); // DEBUG
-
-      // ================== INÍCIO DA CORREÇÃO ==================
-      
-      // 1. Pega a LISTA de transações
       final transactionsList = data['Transactions'] as List?;
       String? statusApi;
 
-      // 2. Verifica se a lista não está vazia
       if (transactionsList != null && transactionsList.isNotEmpty) {
-        // 3. Pega o status do PRIMEIRO item da lista
         statusApi = transactionsList.first?['status']?.toString().toLowerCase();
       }
       
-      // ================== FIM DA CORREÇÃO ==================
-
-      if (statusApi == 'payed' || statusApi == 'completed' || statusApi == 'payexternal') { // Adicionei 'payexternal' por segurança
+      if (statusApi == 'payed' || statusApi == 'completed' || statusApi == 'payexternal') {
         paymentStatus = PaymentStatus.pago;
         _statusTimer?.cancel();
         
-        // TODO: Notificar o backend que o pagamento foi concluído
-        // (Similar ao que a FinishPaymentStore faz com o SalesService)
-        // await Modular.get<SalesService>().atualizarStatusProposta(
-        //   vendaAtual!.nroProposta!, 'pago',
-        // );
+        // Ação de notificar o backend (se existir) foi removida
+        // pois não estamos salvando a proposta.
 
       } else {
-        // Se o status for "pendingPix" (como no seu print) ou qualquer outro,
-        // ele cairá aqui e continuará aguardando.
         paymentStatus = PaymentStatus.aguardando;
       }
     } catch (e) {
@@ -262,7 +233,6 @@ abstract class _TotemPaymentStoreBase with Store {
     return paymentStatus;
   }
   
-  // Lembre-se de cancelar o timer ao sair da tela
   void dispose() {
     _statusTimer?.cancel();
   }

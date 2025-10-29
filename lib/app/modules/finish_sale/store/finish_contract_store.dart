@@ -88,14 +88,14 @@ abstract class _FinishContractStoreBase with Store {
     if (v == null) throw Exception('Venda não carregada.');
 
     // garante nroProposta
-    if (nroProposta == null) {
-      final nroRaw = await _sales.criarProposta(v, vendedorId: _defaultVendedorId);
-      final parsed = _coerceInt(nroRaw);
-      if (parsed == null) {
-        throw Exception('Retorno inválido ao criar proposta: $nroRaw');
-      }
-      nroProposta = parsed;
-    }
+    // if (nroProposta == null) {
+    //   final nroRaw = await _sales.criarProposta(v, vendedorId: _defaultVendedorId);
+    //   final parsed = _coerceInt(nroRaw);
+    //   if (parsed == null) {
+    //     throw Exception('Retorno inválido ao criar proposta: $nroRaw');
+    //   }
+    //   nroProposta = parsed;
+    // }
 
     if (contratoAssinadoServer) {
       throw Exception('Contrato já assinado. Não é possível reenviar.');

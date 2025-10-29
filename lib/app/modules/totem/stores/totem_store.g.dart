@@ -211,16 +211,6 @@ mixin _$TotemStore on _TotemStoreBase, Store {
     return _$gerarContratoAsyncAction.run(() => super.gerarContrato());
   }
 
-  late final _$gerarContratoEObterUrlAssinaturaAsyncAction = AsyncAction(
-      '_TotemStoreBase.gerarContratoEObterUrlAssinatura',
-      context: context);
-
-  @override
-  Future<String?> gerarContratoEObterUrlAssinatura({String? returnUrl}) {
-    return _$gerarContratoEObterUrlAssinaturaAsyncAction.run(
-        () => super.gerarContratoEObterUrlAssinatura(returnUrl: returnUrl));
-  }
-
   late final _$criarRecipientViewUrlAsyncAction =
       AsyncAction('_TotemStoreBase.criarRecipientViewUrl', context: context);
 
