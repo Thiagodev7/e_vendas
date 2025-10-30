@@ -194,11 +194,11 @@ abstract class _TotemPaymentStoreBase with Store {
   @action
   Future<PaymentStatus> consultarStatusPagamento() async {
     final idParaConsulta = currentMyId ?? vendaAtual?.gatewayPagamentoId;
-    
+
     if (galaxPayId == null && (idParaConsulta == null || idParaConsulta.isEmpty)) {
       return PaymentStatus.none;
     }
-    
+
     if(loading && paymentStatus == PaymentStatus.aguardando) return paymentStatus;
 
     loading = true;
@@ -212,20 +212,37 @@ abstract class _TotemPaymentStoreBase with Store {
       String? statusApi;
 
       if (transactionsList != null && transactionsList.isNotEmpty) {
+        // Pega o status do primeiro item e converte para minúsculas
         statusApi = transactionsList.first?['status']?.toString().toLowerCase();
       }
-      
-      if (statusApi == 'payed' || statusApi == 'completed' || statusApi == 'payexternal') {
+
+      // --- CORREÇÃO APLICADA AQUI ---
+      // Define o conjunto de status que representam pagamento concluído
+      const Set<String> paidStatuses = {
+        'closed',
+        'payedpix',
+        'captured',
+        'payexternal',
+        'payed',
+        'payedboleto',
+        'approved',
+        'confirmed',
+        'settled'
+      };
+
+      // Verifica se o statusApi (em minúsculas) está no conjunto de pagos
+      if (statusApi != null && paidStatuses.contains(statusApi)) {
         paymentStatus = PaymentStatus.pago;
         _statusTimer?.cancel();
-        
-        // Ação de notificar o backend (se existir) foi removida
-        // pois não estamos salvando a proposta.
-
+        print(">>> Pagamento Confirmado (Status API: $statusApi)"); // Log
       } else {
         paymentStatus = PaymentStatus.aguardando;
+        // Opcional: Logar o status atual se não for pago
+        // if (statusApi != null) {
+        //   print(">>> Aguardando Pagamento (Status API: $statusApi)");
+        // }
       }
-    } catch (e) {
+       } catch (e) {
       errorMessage = 'Erro ao consultar status: $e';
     } finally {
       loading = false;
