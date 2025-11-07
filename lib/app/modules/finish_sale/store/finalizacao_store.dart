@@ -88,16 +88,47 @@ abstract class _FinalizacaoStoreBase with Store {
       final planSync = v.plano!.copyWith(vidasSelecionadas: vidas);
       final b = computeBilling(planSync);
 
+      // --- Início da Lógica Modificada ---
+
+      final bool isAnual = b.kind == BillingKind.anual;
+      
+      // Valores base
+      final int adesaoCentavos = (b.adesao * 100).round();
+      int mensalCentavos;
+      int prorataCentavos;
+      int totalPrimeiraCentavos;
+
+      if (isAnual) {
+        // 1. APLICA 10% DE DESCONTO NO MENSAL (conforme pedido)
+        // (b.mensal * 0.9) * 100 
+        mensalCentavos = (b.mensal * 90).round(); 
+
+        // 2. APLICA 10% DE DESCONTO NO PRORATA (conforme pedido)
+        // (b.prorata * 0.9) * 100
+        prorataCentavos = (b.prorata * 90).round();
+
+        // 3. O TOTAL É prorata(com desconto) + adesao (conforme pedido)
+        totalPrimeiraCentavos = prorataCentavos + adesaoCentavos;
+
+      } else {
+        // Lógica original (se não for anual, usa os valores cheios)
+        mensalCentavos = (b.mensal * 100).round();
+        prorataCentavos = (b.prorata * 100).round();
+        totalPrimeiraCentavos = b.valorAgoraCentavos; // Valor original do computeBilling
+      }
+
+      // Monta o mapa 'faturamento' com os valores corretos
       faturamento = {
         'vidas': vidas,
-        'is_anual': b.kind == BillingKind.anual,
-        'num_meses': (b.kind == BillingKind.anual) ? 12 : 1,
+        'is_anual': isAnual,
+        'num_meses': isAnual ? 12 : 1,
         'due_day': b.dueDay,
-        'mensal_centavos': (b.mensal * 100).round(),
-        'adesao_centavos': (b.adesao * 100).round(),
-        'prorata_centavos': (b.prorata * 100).round(),
-        'total_primeira_centavos': b.valorAgoraCentavos, // ESTE é o que cobra agora
+        'mensal_centavos': mensalCentavos,
+        'adesao_centavos': adesaoCentavos,
+        'prorata_centavos': prorataCentavos,
+        'total_primeira_centavos': totalPrimeiraCentavos, // ESTE é o que cobra agora
       };
+      // --- Fim da Lógica Modificada ---
     }
 
     status = FinalizacaoStatus.loading;

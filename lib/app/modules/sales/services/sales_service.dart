@@ -126,7 +126,7 @@ class SalesService {
     try {
       // Para update não precisamos reenviar vendedor_id; backend ignora se vier.
       final payload = _mapVendaToCreatePayload(v, 0 /*ignored no back*/);
-
+      
       await _dio.put(_updateFullPath(nroProposta), data: payload);
     } on DioException catch (e) {
       throw Exception(_handleDioError(e, 'Erro ao atualizar proposta'));
@@ -253,6 +253,7 @@ double? _computeValorVenda(VendaModel v) {
           .map((c) => {
                 'meio_comunicacao_id': c.idMeioComunicacao,
                 'descricao': c.descricao,
+                'nome_contato': c.nomeContato,
               })
           .toList(),
 

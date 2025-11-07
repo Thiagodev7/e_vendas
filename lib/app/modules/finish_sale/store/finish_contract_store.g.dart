@@ -16,6 +16,13 @@ mixin _$FinishContractStore on _FinishContractStoreBase, Store {
           Computed<bool>(() => super.podeDispararContrato,
               name: '_FinishContractStoreBase.podeDispararContrato'))
       .value;
+  Computed<bool>? _$hasEnvelopeComputed;
+
+  @override
+  bool get hasEnvelope =>
+      (_$hasEnvelopeComputed ??= Computed<bool>(() => super.hasEnvelope,
+              name: '_FinishContractStoreBase.hasEnvelope'))
+          .value;
 
   late final _$vendaAtom =
       Atom(name: '_FinishContractStoreBase.venda', context: context);
@@ -195,9 +202,11 @@ mixin _$FinishContractStore on _FinishContractStoreBase, Store {
 
   @override
   Future<void> gerarContrato(
-      {required String enrollmentFmt, required String monthlyFmt}) {
-    return _$gerarContratoAsyncAction.run(() => super
-        .gerarContrato(enrollmentFmt: enrollmentFmt, monthlyFmt: monthlyFmt));
+      {required String enrollmentFmt,
+      required String monthlyFmt,
+      required String dueDay}) {
+    return _$gerarContratoAsyncAction.run(() => super.gerarContrato(
+        enrollmentFmt: enrollmentFmt, monthlyFmt: monthlyFmt, dueDay: dueDay));
   }
 
   late final _$conferirAssinaturaDocuSignAsyncAction = AsyncAction(
@@ -208,6 +217,26 @@ mixin _$FinishContractStore on _FinishContractStoreBase, Store {
   Future<DocusignStatus?> conferirAssinaturaDocuSign() {
     return _$conferirAssinaturaDocuSignAsyncAction
         .run(() => super.conferirAssinaturaDocuSign());
+  }
+
+  late final _$criarRecipientViewUrlAsyncAction = AsyncAction(
+      '_FinishContractStoreBase.criarRecipientViewUrl',
+      context: context);
+
+  @override
+  Future<String?> criarRecipientViewUrl({String? returnUrl}) {
+    return _$criarRecipientViewUrlAsyncAction
+        .run(() => super.criarRecipientViewUrl(returnUrl: returnUrl));
+  }
+
+  late final _$criarConsoleViewUrlAsyncAction = AsyncAction(
+      '_FinishContractStoreBase.criarConsoleViewUrl',
+      context: context);
+
+  @override
+  Future<String?> criarConsoleViewUrl({String? returnUrl}) {
+    return _$criarConsoleViewUrlAsyncAction
+        .run(() => super.criarConsoleViewUrl(returnUrl: returnUrl));
   }
 
   late final _$_FinishContractStoreBaseActionController =
@@ -248,7 +277,8 @@ pagamentoConcluidoServer: ${pagamentoConcluidoServer},
 contratoAssinadoServer: ${contratoAssinadoServer},
 vendaFinalizadaServer: ${vendaFinalizadaServer},
 contratoEnvelopeId: ${contratoEnvelopeId},
-podeDispararContrato: ${podeDispararContrato}
+podeDispararContrato: ${podeDispararContrato},
+hasEnvelope: ${hasEnvelope}
     ''';
   }
 }

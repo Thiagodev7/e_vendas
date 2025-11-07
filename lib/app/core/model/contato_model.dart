@@ -31,7 +31,7 @@ class ContatoModel {
       ddd: json["ddd"] ?? '',
       descricao: json["descricao"] ?? '',
       contato: json["contato"] ?? '',
-      nomeContato: json["contato"] ?? '',
+      nomeContato: json["nome_contato"] ?? '',
     );
   }
 }

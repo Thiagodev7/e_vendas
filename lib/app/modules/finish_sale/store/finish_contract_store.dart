@@ -96,6 +96,7 @@ void bindVenda(VendaModel v) {
   Future<void> gerarContrato({
     required String enrollmentFmt,
     required String monthlyFmt,
+    required String dueDay,
   }) async {
     final v = venda;
     if (v == null) throw Exception('Venda não carregada.');
@@ -209,6 +210,7 @@ void bindVenda(VendaModel v) {
       'dependents': deps.length,
       'enrollment': enrollmentFmt,
       'monthly': monthlyFmt,
+      'dueDay': dueDay,
 
       // dependentes
       'dependentsData': depsData,

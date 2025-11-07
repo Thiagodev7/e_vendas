@@ -119,6 +119,10 @@ class PlanModel {
     return mensal?.valor ?? '0.00';
   }
 
+  String getDayue() {
+    return dueDay?.toString() ?? '';
+  }
+
   String getTaxaAdesao() {
     final adesao = _findValue('Taxa de Adesão', vidasSelecionadas);
     return adesao?.valor ?? '0.00';

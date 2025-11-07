@@ -32,6 +32,8 @@ class ContratoCard extends StatelessWidget {
           final dynamic enrollmentRaw =
               plan?.getTaxaAdesao() ?? plan?.getTaxaAdesaoTotal();
 
+          final dynamic daysRaw = plan?.getDayue() ?? " ";
+
           final monthlyFmt = _fmtCurrency(monthlyRaw);
           final enrollmentFmt = _fmtCurrency(enrollmentRaw);
 
@@ -88,6 +90,7 @@ class ContratoCard extends StatelessWidget {
                                 await contractStore.gerarContrato(
                                   enrollmentFmt: enrollmentFmt,
                                   monthlyFmt: monthlyFmt,
+                                  dueDay: daysRaw,
                                 );
                                 _toast(context, 'Contrato gerado!');
                               } catch (e) {
