@@ -2,7 +2,7 @@ name: e_vendas
 description: "Projeto Flutter para vendas de planos odontológicos (e-Vendas)"
 publish_to: 'none' # Mantém privado, remova para publicar no pub.dev
 
-version: 1.0.0+1
+version: 1.2.0+2
 
 environment:
   sdk: ^3.6.1

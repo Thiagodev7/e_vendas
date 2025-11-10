@@ -2,13 +2,66 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:mobx/mobx.dart'; // ❗️ Importe o MobX
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:e_vendas/app/modules/finish_sale/store/finish_contract_store.dart';
 import 'package:e_vendas/app/modules/finish_sale/store/finish_payment_store.dart';
 
-class ContratoCard extends StatelessWidget {
+// 1. Transformado em StatefulWidget
+class ContratoCard extends StatefulWidget {
   const ContratoCard({super.key});
+
+  @override
+  State<ContratoCard> createState() => _ContratoCardState();
+}
+
+// 2. Criação do State
+class _ContratoCardState extends State<ContratoCard> {
+  // Stores e Controller são movidos para o State
+  final contractStore = Modular.get<FinishContractStore>();
+  final paymentStore = Modular.get<FinishPaymentStore>();
+  final _envelopeIdController = TextEditingController();
+
+  ReactionDisposer? _reactionDisposer;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // 3. Sincronização Inicial: Define o texto inicial do controller
+    _envelopeIdController.text = contractStore.contratoEnvelopeId ?? '';
+
+    // 4. Sincronização (UI -> Store):
+    //    Quando o usuário digitar, atualiza o store
+    _envelopeIdController.addListener(_syncControllerToStore);
+
+    // 5. Sincronização (Store -> UI):
+    //    Se o store mudar (ex: "Gerar Contrato" foi clicado),
+    //    atualiza o texto no controller.
+    _reactionDisposer = reaction(
+      (_) => contractStore.contratoEnvelopeId,
+      (String? storeId) {
+        if (storeId != _envelopeIdController.text) {
+          _envelopeIdController.text = storeId ?? '';
+        }
+      },
+    );
+  }
+
+  void _syncControllerToStore() {
+    // Chama a nova action que criamos no store
+    contractStore.setContratoEnvelopeId(_envelopeIdController.text);
+  }
+
+  @override
+  void dispose() {
+    // 6. Limpeza: Essencial para evitar memory leaks
+    _envelopeIdController.removeListener(_syncControllerToStore);
+    _envelopeIdController.dispose();
+    _reactionDisposer?.call();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,9 +75,7 @@ class ContratoCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Observer(builder: (_) {
-          final contractStore = Modular.get<FinishContractStore>();
-          final paymentStore = Modular.get<FinishPaymentStore>();
-
+          // Os stores já foram buscados no initState
           final plan = paymentStore.venda?.plano;
 
           final dynamic monthlyRaw =
@@ -38,13 +89,15 @@ class ContratoCard extends StatelessWidget {
           final enrollmentFmt = _fmtCurrency(enrollmentRaw);
 
           final contratoAssinado = contractStore.contratoAssinadoServer;
-          final envelopeId = contractStore.contratoEnvelopeId;
-          final hasEnvelope = envelopeId != null && envelopeId.isNotEmpty;
+          
+          // O 'envelopeId' agora é lido diretamente do controller
+          // mas o 'hasEnvelope' ainda vem do computed do store
+          final hasEnvelope = contractStore.hasEnvelope;
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ---------- Cabeçalho ----------
+              // ---------- Cabeçalho (sem mudanças) ----------
               Row(
                 children: [
                   Container(
@@ -77,7 +130,10 @@ class ContratoCard extends StatelessWidget {
               const SizedBox(height: 16),
               const Divider(height: 1),
 
-              // ---------- Linha de ações ----------
+              // ---------- Linha de ações (sem mudanças) ----------
+              // O botão "Atualizar status" já vai funcionar, pois ele
+              // lê o `contratoEnvelopeId` do store, que agora é
+              // atualizado pelo campo de texto.
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -110,8 +166,8 @@ class ContratoCard extends StatelessWidget {
                             ? 'Gerando...'
                             : 'Gerar contrato',
                       ),
-                      style: FilledButton.styleFrom(padding:
-                          const EdgeInsets.symmetric(vertical: 14)),
+                      style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14)),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -119,7 +175,7 @@ class ContratoCard extends StatelessWidget {
                     child: OutlinedButton.icon(
                       onPressed: (contractStore.checking ||
                               contractStore.loading ||
-                              !hasEnvelope)
+                              !hasEnvelope) // Botão ainda desabilita se não tiver ID
                           ? null
                           : () async {
                               final ds = await contractStore
@@ -162,53 +218,71 @@ class ContratoCard extends StatelessWidget {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    if (hasEnvelope)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.inventory_2_outlined, size: 18),
-                          const SizedBox(width: 6),
-                          InkWell(
-                            onTap: () async {
-                              final url = Modular.get<FinishContractStore>()
-                                  .getEnvelopePdfUrl();
-                              if (url == null) return;
-                              final uri = Uri.parse(url);
-                              if (await canLaunchUrl(uri)) {
-                                await launchUrl(uri,
-                                    mode: LaunchMode.externalApplication);
-                              }
-                            },
-                            child: Chip(
-                              label: Text('Envelope: ${_short(envelopeId!)}'),
-                              backgroundColor: cs.surface,
-                              side: BorderSide(color: cs.outlineVariant),
+                    //
+                    // 🔽========= AQUI ESTÁ A MUDANÇA =========🔽
+                    //
+                    Row(
+                      children: [
+                        const Icon(Icons.inventory_2_outlined, size: 18),
+                        const SizedBox(width: 6),
+                        // Campo de texto editável
+                        Expanded(
+                          child: TextFormField(
+                            controller: _envelopeIdController,
+                            decoration: InputDecoration(
+                              labelText: 'Envelope ID',
+                              hintText: 'Insira ou cole o ID do envelope',
+                              isDense: true,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    BorderSide(color: cs.outlineVariant),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    BorderSide(color: cs.outlineVariant),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 10),
                             ),
+                            style: textTheme.bodyMedium,
                           ),
-                          IconButton(
-                            tooltip: 'Copiar ID',
-                            icon: const Icon(Icons.copy, size: 18),
-                            onPressed: () async {
-                              await Clipboard.setData(
-                                  ClipboardData(text: envelopeId!));
+                        ),
+                        // Botão de Copiar (agora lê do controller)
+                        IconButton(
+                          tooltip: 'Copiar ID',
+                          icon: const Icon(Icons.copy, size: 18),
+                          onPressed: () async {
+                            final id = _envelopeIdController.text;
+                            if (id.isNotEmpty) {
+                              await Clipboard.setData(ClipboardData(text: id));
                               _toast(context, 'Envelope ID copiado');
-                            },
-                          ),
-                        ],
-                      )
-                    else
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.inventory_2_outlined, size: 18),
-                          const SizedBox(width: 6),
-                          Text('Envelope ainda não gerado',
-                              style: textTheme.bodyMedium
-                                  ?.copyWith(color: cs.onSurfaceVariant)),
-                        ],
-                      ),
+                            }
+                          },
+                        ),
+                        // Botão para abrir o PDF (opcional, mantido)
+                        IconButton(
+                          tooltip: 'Abrir PDF do envelope',
+                          icon: const Icon(Icons.open_in_new, size: 18),
+                          onPressed: !hasEnvelope
+                              ? null
+                              : () async {
+                                  final url = contractStore.getEnvelopePdfUrl();
+                                  if (url == null) return;
+                                  final uri = Uri.parse(url);
+                                  if (await canLaunchUrl(uri)) {
+                                    await launchUrl(uri,
+                                        mode: LaunchMode.externalApplication);
+                                  }
+                                },
+                        ),
+                      ],
+                    ),
+                    // 🔼========= FIM DA MUDANÇA =========🔼
+                    //
 
-                    // Última verificação
+                    // Última verificação (sem mudanças)
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -234,8 +308,9 @@ class ContratoCard extends StatelessWidget {
   }
 
   // ===== helpers visuais/formatadores =====
+  // (Movidos para dentro da classe State)
 
-  static String _fmtCurrency(dynamic v) {
+  String _fmtCurrency(dynamic v) {
     if (v == null) return 'R\$ 0,00';
     if (v is num) return _toCurrency(v);
     if (v is String) {
@@ -250,19 +325,19 @@ class ContratoCard extends StatelessWidget {
     return 'R\$ 0,00';
   }
 
-  static String _toCurrency(num? v) {
+  String _toCurrency(num? v) {
     final n = (v ?? 0);
     final cents = n.round();
     final s = (cents / 100).toStringAsFixed(2).replaceAll('.', ',');
     return 'R\$ $s';
   }
 
-  static String _short(String s) {
+  String _short(String s) {
     if (s.length <= 12) return s;
     return '${s.substring(0, 6)}…${s.substring(s.length - 4)}';
   }
 
-  static String _fmtDt(DateTime dt) {
+  String _fmtDt(DateTime dt) {
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
     final d = dt.day.toString().padLeft(2, '0');
@@ -270,7 +345,7 @@ class ContratoCard extends StatelessWidget {
     return '$h:$m $d/$mo';
   }
 
-  static Widget _statusPill({
+  Widget _statusPill({
     required bool ok,
     required String labelOk,
     required String labelKo,
@@ -301,7 +376,7 @@ class ContratoCard extends StatelessWidget {
     );
   }
 
-  static void _toast(BuildContext context, String msg) {
+  void _toast(BuildContext context, String msg) {
     if (!context.mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger

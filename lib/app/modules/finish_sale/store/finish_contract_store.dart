@@ -72,6 +72,11 @@ void bindVenda(VendaModel v) {
   } catch (_) {}
 }
 
+@action
+  void setContratoEnvelopeId(String? value) {
+    contratoEnvelopeId = value?.trim();
+  }
+
   @action
   void bindNroProposta(dynamic nro) => nroProposta = _coerceInt(nro);
 
